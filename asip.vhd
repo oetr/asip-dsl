@@ -87,7 +87,10 @@ begin
 
       --------------------------------------------------------------
       when "0001" =>                    -- wait(cycles)
-        if (not started_reg) then
+        -- allow to wait for one clock cycle
+        if wait_cycles = 1 then
+          i_next <= i_reg + 1;
+        elsif (not started_reg) then
           wait_counter_next <= unsigned(wait_cycles);
           started_next      <= true;
         else                            -- count down
@@ -98,6 +101,7 @@ begin
           end if;
         end if;
 
+        -- Debugging
         oLEDG(1) <= '1';
 
       --------------------------------------------------------------
