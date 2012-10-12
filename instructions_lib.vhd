@@ -24,15 +24,16 @@ package instructions_lib is
   --------------------------------------------------------------------
   -- User instructions
   --------------------------------------------------------------------
-  constant INSTRUCTION_COUNT : integer := 4;
+  constant INSTRUCTION_COUNT : integer := 5;
   type instruction_rom_type is array (0 to INSTRUCTION_COUNT - 1) of
     std_logic_vector (39 downto 0);
   constant INSTRUCTIONS : instruction_rom_type :=
     (
       "0000000000000000000000000000000000000000",
-      "0000000000101111101011110000100000000001",
+      "0000000001101111101011110000100000000001",
       "1111111111111111111111111111111100000000",
-      "0000000000101111101011110000100000000001"
+      "0000000000101111101011110000100000000001",
+      "0000000000101111101011110000100000001111"
       );
 
 end package instructions_lib;
