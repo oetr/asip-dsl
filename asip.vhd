@@ -88,7 +88,7 @@ begin
       --------------------------------------------------------------
       when "0001" =>                    -- wait(cycles)
         -- allow to wait for one clock cycle
-        if wait_cycles = 1 then
+        if wait_cycles = std_logic_vector(to_unsigned(1, wait_cycles'length)) then
           i_next <= i_reg + 1;
         elsif (not started_reg) then
           wait_counter_next <= unsigned(wait_cycles);
@@ -104,6 +104,8 @@ begin
         -- Debugging
         oLEDG(1) <= '1';
 
+      when "0010" =>                    -- jmp, line
+        i_next <= to_integer(unsigned(wait_cycles));
       --------------------------------------------------------------
       when "1111" =>                    -- halt(cycles)
         oLEDG(2) <= '1';
