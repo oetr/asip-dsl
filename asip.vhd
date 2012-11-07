@@ -16,8 +16,11 @@ architecture arch of asip is
   -- IO signals
   signal clk, reset     : std_logic;
   -- declare: 16 32-bit registers
-  signal registers_reg  : reg_type;
-  signal registers_next : reg_type;
+  signal registers_reg  : regs_type;
+  signal registers_next : regs_type;
+  -- 1 if register
+  signal if_reg         : register_type;
+  signal if_next        : register_type;
 
   -- instruction counter
   signal i_reg, i_next : integer range 0 to INSTRUCTION_COUNT-1;
@@ -36,11 +39,13 @@ begin
   begin
     if reset = '1' then
       registers_reg    <= (others => (others => '0'));
+      if_reg           <= (others => '0');
       i_reg            <= 0;
       wait_counter_reg <= (others => '0');
       started_reg      <= false;
     elsif rising_edge(clk) then
       registers_reg    <= registers_next;
+      if_reg           <= if_next;
       i_reg            <= i_next;
       wait_counter_reg <= wait_counter_next;
       started_reg      <= started_next;
@@ -50,7 +55,8 @@ begin
   --------------------------------------------------------------------
   -- working through the instructions
   --------------------------------------------------------------------
-  process (i_reg, registers_reg, started_reg, wait_counter_reg) is
+  process (i_reg, if_reg, registers_reg, started_reg,
+           wait_counter_reg) is
     variable instruction      : std_logic_vector(INSTR_WIDTH-1 downto 0);
     variable instruction_name : std_logic_vector(INSTR_NAME_WIDTH-1 downto 0);
     variable reg              : integer range 0 to REG_NUM-1;
@@ -60,6 +66,7 @@ begin
   begin
     -- default assignments
     registers_next    <= registers_reg;
+    if_next           <= if_reg;
     i_next            <= i_reg;
     wait_counter_next <= wait_counter_reg;
     started_next      <= started_reg;
@@ -104,18 +111,41 @@ begin
         -- Debugging
         oLEDG(1) <= '1';
 
+      ----------------------------------------------------------------
       when "0010" =>                    -- jmp, line
         i_next <= to_integer(unsigned(wait_cycles));
-      --------------------------------------------------------------
-      when "1111" =>                    -- halt(cycles)
-        oLEDG(2) <= '1';
 
+      ----------------------------------------------------------------
+      when "0101" =>                    -- r=v?
+        i_next <= i_reg + 1;
+        if registers_reg(reg) = val then
+          if_next(0) <= '1';
+        else
+          if_next <= (others => '0');
+        end if;
+
+
+      ----------------------------------------------------------------
+      when "1100" =>                   -- jump if true
+        if if_reg(0) = '1' then
+          i_next <= to_integer(unsigned(wait_cycles));
+        else
+          i_next <= i_reg + 1;
+        end if;
+
+      ----------------------------------------------------------------
       when X"b" =>                      -- (+ reg val)
         oLEDG(3) <= '1';
         registers_next(reg) <= std_logic_vector(unsigned(registers_reg(reg)) +
                                                 unsigned(val));
-        i_next              <= i_reg + 1;
-        
+        i_next <= i_reg + 1;
+
+
+      ----------------------------------------------------------------
+      when "1111" =>                    -- halt(cycles)
+        oLEDG(2) <= '1';
+
+      ----------------------------------------------------------------
       when others => null;
     end case;
   end process;

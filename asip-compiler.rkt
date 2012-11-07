@@ -11,17 +11,6 @@
     (string-append (make-string (- bits (string-length binary-number)) #\0)
                    binary-number)))
 
-;; TODO: figure out how to use macro in this case:
-;; (define-syntax n->binary*
-;;   (syntax-rules ()
-;;     [(n->binary* bits a-number)
-;;      (n->binary bits a-number)]
-;;     [(n->binary* bits0 a-number0 bits1 a-number1 ...)
-;;      (string-append
-;;       (n->binary bits0 a-number0)
-;;       (n->binary bits1 a-number1)
-;;       ...)]))
-
 (define (n->binary* . args)
   (when (not (zero? (modulo (length args) 2)))
     (error 'n->binary* "Number of arguments should be divisible by 2.\n"))
@@ -76,7 +65,7 @@
               REG_COUNT_BITS         reg
               INSTRUCTION_NAME_WIDTH id))
 
- ;; compare register with a value (write result into a temporary register)
+;; compare register with a value (write result into a temporary register)
 (define (asip-r=v? reg val)
   (define id 5)
   (call-standard reg val id))
@@ -104,6 +93,24 @@
 (define (asip+rv reg val)
   (define id 11)
   (call-standard reg val id))
+
+(define (asip-jmp-if-true line)
+  (printf "jump-if-true: ~a~n" line)
+  (define id 12)
+  (n->binary* notINSTRUCTION_NAME_WIDTH line
+              INSTRUCTION_NAME_WIDTH    id))
+
+(define (asip-jmp-if-false line)
+  (printf "jump-if-false: ~a~n" line)
+  (define id 13)
+  (n->binary* notINSTRUCTION_NAME_WIDTH line
+              INSTRUCTION_NAME_WIDTH    id))
+
+(define (asip-jmp-if-r=v? line)
+  (printf "jump-if=r-v?: ~a~n" line)
+  (define id 14)
+  (n->binary* notINSTRUCTION_NAME_WIDTH line
+              INSTRUCTION_NAME_WIDTH    id))
 
 ;;; ----------------------------------------
 ;;; High-level instructions
@@ -135,66 +142,13 @@
        (cons fn0
              (mc-generate fn1 ...)))]))
 
-;; to convert a list of machine instructions into equivalent code in VHDL
-;; (define (mc->vhdl instructions (rom-name "INSTRUCTIONS"))
-;;   ;; set the constant 
-;;   constant INSTRUCTION_COUNT : integer := 6;
-;;   type instruction_rom_type is array (0 to INSTRUCTION_COUNT - 1) of
-;;     std_logic_vector (39 downto 0);
-;;   constant INSTRUCTIONS : instruction_rom_type :=
-;;     (
-;;       "0000000000000000000000000000000000000000",
-;;       "0000000001101111101011110000100000000001",
-;;       "1111111111111111111111111111111100000000",
-;;       "0000000000101111101011110000100000000001",
-;;       "0000000000000000000000000000000000000010",
-;;       "0000000000101111101011110000100000001111"
-;;       );
-;;   (let loop ([instructions instructions])
-;;     (define tail (cdr instructions))
-;;     (if (empty? tail)
-;;         ))
-
 ;; a test program
 (define i 0)
-(mc-generate
- (asip-while (asip-r<v? 1 10)
-             (asip-set 0 #b1111111111)
-             (asip-wait 50000000)
-             (asip-set 0 0)
-             (asip-wait 50000000)
-             (asip+rv 1 1)))
-
-(mc-generate
- (asip-while (asip-set 0 0)
-             (asip-wait 50000000)
-             (asip+rv 0 1)
-             (asip-wait 50000000)
-             (asip-jump 2)
-             (asip-halt)))
-
-
-(mc-generate
- (asip-wait 50000000)
- (asip+rv 0 1)
- (asip-jump 0)
- (asip-halt))
-
-(define i 0)
-(mc-generate
- (asip-set 0 0)
- (asip-wait 50000000)
- (asip+rv 0 10)
- (asip-jump 1)
- (asip-halt))
-
-
-
-
-
 (list
  (asip-set 0 0)
  (asip-wait 50000000)
- (asip+rv 0 10)
+ (asip+rv 0 1)
+ (asip-r=v? 0 10)
+ (asip-jmp-if-true 6)
  (asip-jump 1)
  (asip-halt))
