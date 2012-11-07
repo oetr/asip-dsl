@@ -109,6 +109,13 @@ begin
       --------------------------------------------------------------
       when "1111" =>                    -- halt(cycles)
         oLEDG(2) <= '1';
+
+      when X"b" =>                      -- (+ reg val)
+        oLEDG(3) <= '1';
+        registers_next(reg) <= std_logic_vector(unsigned(registers_reg(reg)) +
+                                                unsigned(val));
+        i_next              <= i_reg + 1;
+        
       when others => null;
     end case;
   end process;
