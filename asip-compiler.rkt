@@ -5,39 +5,6 @@
 (define notINSTRUCTION_NAME_WIDTH (+ REG_WIDTH REG_COUNT_BITS))
 (define WHOLE_INSTRUCTION_WIDTH (+ REG_WIDTH REG_COUNT_BITS INSTRUCTION_NAME_WIDTH))
 
-;;; Low-level operations
-(define (n->binary bits a-number)
-  (let ([binary-number (number->string a-number 2)])
-    (string-append (make-string (- bits (string-length binary-number)) #\0)
-                   binary-number)))
-
-(define (n->binary* instruction-length . args)
-  (when (not (zero? (modulo (length args) 2)))
-    (error 'n->binary* "Number of arguments should be divisible by 2. ~a\n" args))
-  (define all-length (let loop ([args args][num #t])
-                       (cond [(empty? args) 0]
-                             [else (if num
-                                       (+ (car args) (loop (cdr args) (xor num #t)))
-                                       (loop (cdr args) (xor num #t)))])))
-  (when (> all-length instruction-length)
-    (error 'n->binary* "Exceeding instruction length ~a by ~a~n"
-           instruction-length
-           (- all-length instruction-length)))
-  (define result 
-    (apply string-append
-           (let loop ([args args])
-             (if (empty? args)
-                 (list "")
-                 (cons
-                  (n->binary (car args) (cadr args))
-                  (loop (cddr args)))))))
-  (define len (string-length result))
-  (if (< len instruction-length)
-      (string-append (build-string (- instruction-length len)
-                                   (lambda (not-used) #\0))
-                     result)
-      result))
-
 ;;; ----------------------------------------
 ;;; Low-level instructions
 ;;; ----------------------------------------
@@ -171,8 +138,41 @@
  (asip-halt))
 
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; New approach that abstracts away a lot of things
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (n->binary bits a-number)
+  (let ([binary-number (number->string a-number 2)])
+    (string-append (make-string (- bits (string-length binary-number)) #\0)
+                   binary-number)))
+
+(define (n->binary* instruction-length . args)
+  (when (not (zero? (modulo (length args) 2)))
+    (error 'n->binary* "Number of arguments should be divisible by 2. ~a\n" args))
+  (define all-length (let loop ([args args][num #t])
+                       (cond [(empty? args) 0]
+                             [else (if num
+                                       (+ (car args) (loop (cdr args) (xor num #t)))
+                                       (loop (cdr args) (xor num #t)))])))
+  (when (> all-length instruction-length)
+    (error 'n->binary* "Exceeding instruction length ~a by ~a~n"
+           instruction-length
+           (- all-length instruction-length)))
+  (define result
+    (apply string-append
+           (let loop ([args args])
+             (if (empty? args)
+                 (list "")
+                 (cons
+                  (n->binary (car args) (cadr args))
+                  (loop (cddr args)))))))
+  (define len (string-length result))
+  (if (< len instruction-length)
+      (string-append (build-string (- instruction-length len)
+                                   (lambda (not-used) #\0))
+                     result)
+      result))
+
 (define OPERATION-WIDTH 4)
 (define REGISTER-WIDTH 32)
 (define REGISTER-N-WIDTH 4) ;; there are 2^4 registers
@@ -248,7 +248,9 @@
 
 (reset-instructions!)
 
-;; define instructions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Instructions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-instruction asip-set-rv reg val)
 (define-instruction asip-wait cycles)
 (define-instruction asip-jump line)
@@ -257,6 +259,9 @@
 (define-instruction asip-eq-rvr reg val reg)
 (define-instruction asip-halt)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Code
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (list
  (asip-set-rv 0 0)
  (asip-wait 50000000)
