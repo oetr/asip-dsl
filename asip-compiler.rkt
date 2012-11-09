@@ -224,22 +224,19 @@
 (define (user-registers-reset!)
   (set! user-registers (make-hash)))
 
-(define (user-register-set! reg val)
-  (hash-set! user-registers reg val))
+(define-syntax user-register-set!
+  (syntax-rules ()
+    [(_ name val)
+     (hash-set! user-registers 'name val)]))
 
-(define (user-register-ref reg)
-  (hash-ref user-registers reg #f))
-
-(define (define-user-register name initial-value)
-  (hash-set! user-registers name initial-value))
-
-(define-syntax define-user-register
+(define-syntax user-register-ref
   (syntax-rules ()
     [(_ name)
      (begin
-       (define name 'name)
-       (unless (user-register-ref 'name)
-         (hash-set! user-registers 'name 0)))]))
+       (unless (hash-ref user-registers 'name #f)
+         (hash-set! user-registers 'name 0))
+       (hash-ref user-registers 'name #f))]))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Program counter
@@ -283,11 +280,6 @@
   (r! reg val))
 
 (define-instruction (asip-wait cycles)
-  (define-user-register counter)
-  (define-user-register started)
-  (when (= (user-register-ref started) 0)
-    (user-register-set! started 1)
-    (user-register-set! counter cycles))
   (when (= (user-register-ref started) 1)
     (define c (user-register-ref counter))
     (if (or (= c 1) (= c 0))
@@ -295,7 +287,10 @@
           (pc-increase!)
           (user-register-set! counter 0)
           (user-register-set! started 0))
-        (user-register-set! counter (- c 1)))))
+        (user-register-set! counter (- c 1))))
+  (when (= (user-register-ref started) 0)
+    (user-register-set! started 1)
+    (user-register-set! counter cycles)))
 
 (define-instruction (asip-jump line)
   (pc-set! line))
@@ -331,7 +326,6 @@
 ;;; Simulator
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (execute-until-finished instruction)
-  (printf "executing: ~a, pc: ~n" instruction)
   (define pc-before pc)
   (eval instruction)
   (define pc-after pc)
@@ -346,7 +340,6 @@
        (lambda (msg)
          (cond
           [(symbol=? msg 'step)
-           (printf "instr: ~a~n" (vector-ref instr pc))
            (eval (vector-ref instr pc))])))]))
 
 (define sim1 (make-simulator
@@ -360,4 +353,18 @@
 
 (define (simulator-step a-sim) (a-sim 'step))
 
-(simulator-step sim1) registers
+(define (show-environment)
+  (printf "PC:        ~a~n" pc)
+  (printf "regs:      ~a~n" registers)
+  (printf "user-regs: ~a~n~n" user-registers))
+
+(define (simulator-run sim steps (debug #f))
+  (when debug
+    (printf "----- Simulation Start -------~n")
+    (show-environment))
+  (for ([step steps])
+    (simulator-step sim1)
+    (when debug
+      (show-environment))))
+
+(simulator-run sim1 10 #t)
