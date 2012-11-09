@@ -131,6 +131,17 @@
                'normalize-name
                "Name ~a does not follow the naming conventions~n" a-symbol)]))]))
 
+;; finds whether some of the elements in the list lof-elements
+;; is in the a-list
+(define (find lof-elements . a-list)
+  ;;(printf "~a, car: ~a, cdr: ~a~n" a-list (car a-list) (cdr a-list))
+  (cond [(empty? a-list) #f]
+        [(ormap (lambda (element)
+                   (equal? element (car a-list)))
+                 lof-elements) #t]
+        [(list? (car a-list)) (or (apply find (cons lof-elements (car a-list)))
+                                  (apply find (cons lof-elements (cdr a-list))))]
+        [else (apply find (cons lof-elements (cdr a-list)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Macro to define a procedure that is converted into a string
@@ -164,10 +175,15 @@
        (eval `(define (,machine-code-name . ,arguments)
                 (n->binary* ,INSTRUCTION-WIDTH . ,widths)))
        ;; procedure to run the code in simulation
-       (eval `(define (,simulation-name . ,arguments)
-                body ...))
-       (printf "~a~n" 'body)
-       ...
+       ;; analyze the procedure's body to see if the
+       ;; program counter gets incremented somewhere
+       (define manipulates-pc? (find '(pc-set! pc-increase!) 'body ...))
+       (define definition `(define (,simulation-name . ,arguments)
+                             body ...))
+       (unless manipulates-pc?
+         (set! definition (append definition `((,pc-increase!)))))
+       (eval definition)
+       (pretty-print definition)
        )]))
 
 
@@ -230,7 +246,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define pc 0)
 (define (pc-set! val) (set! pc val))
-(define (pc-reset!) (set! pc 0)
+(define (pc-ref) pc)
+(define (pc-increase!) (pc-set! (+ 1 (pc-ref))))
+(define (pc-reset!) (set! pc 0))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -254,7 +272,9 @@
   
   )
 
-(define-instruction (asip-jump line))
+(define-instruction (asip-jump line)
+  (pc-set! line))
+
 (define-instruction (asip-jump-if-true line))
 (define-instruction (asip-add-rvr reg val reg1))
 (define-instruction (asip-eq-rvr reg val reg1))
@@ -272,3 +292,16 @@
  (asip-jump-if-true-mc 6)
  (asip-jump-mc 1)
  (asip-halt-mc))
+
+
+
+(list
+ (asip-set-rv-simulation 0 0)
+ (asip-wait-simulation 50000000)
+ (asip-add-rvr-simulation 0 1 0)
+ (asip-eq-rvr-simulation 0 10 0)
+ (asip-jump-if-true-simulation 6)
+ (asip-jump-simulation 1)
+ (asip-halt-simulation))
+
+
