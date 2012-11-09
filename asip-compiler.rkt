@@ -86,10 +86,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Constants
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define OPERATION-WIDTH 4)
-(define REGISTER-WIDTH 32)
-(define REGISTER-N-WIDTH 4) ;; there are 2^4 registers
-(define LINE-N-WIDTH 10)    ;; 1024 lines in code!
+(define OPERATION-WIDTH   4)
+(define REGISTER-WIDTH    32)
+(define REGISTER-N-WIDTH  4)     ;; there are 2^4 registers
+(define LINE-N-WIDTH      10)    ;; 1024 lines in code!
 (define INSTRUCTION-WIDTH (+ OPERATION-WIDTH (* 3 REGISTER-N-WIDTH) REGISTER-WIDTH))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
