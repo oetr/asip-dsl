@@ -114,7 +114,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax define-instruction
   (syntax-rules ()
-    [(_ name . args)
+    [(_ (name . args) body ...)
      (begin
        (define closure-id (instruction-exists? 'name))
        (unless closure-id
@@ -140,13 +140,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Instructions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-instruction asip-set-rv reg val)
-(define-instruction asip-wait cycles)
-(define-instruction asip-jump line)
-(define-instruction asip-jump-if-true line)
-(define-instruction asip-add-rvr reg val reg)
-(define-instruction asip-eq-rvr reg val reg)
-(define-instruction asip-halt)
+(define-instruction (asip-set-rv reg val))
+(define-instruction (asip-wait cycles))
+(define-instruction (asip-jump line))
+(define-instruction (asip-jump-if-true line))
+(define-instruction (asip-add-rvr reg val reg))
+(define-instruction (asip-eq-rvr reg val reg))
+(define-instruction (asip-halt))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Code
