@@ -86,6 +86,13 @@
   (instructions-reset!)
   (id-reset!))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Prepare for instruction generation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define id (id-make))
+(define instructions (instructions-make))
+(reset-instructions!)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Constants
@@ -114,7 +121,7 @@
   result)
 
 ;; the naming conventions are r0---r15, val, line, cycles
-;; strips the name of 
+;; strips the name of
 (define (normalize-name a-symbol)
   (cond
    [(or (symbol=? a-symbol 'val)
@@ -137,8 +144,8 @@
   ;;(printf "~a, car: ~a, cdr: ~a~n" a-list (car a-list) (cdr a-list))
   (cond [(empty? a-list) #f]
         [(ormap (lambda (element)
-                   (equal? element (car a-list)))
-                 lof-elements) #t]
+                  (equal? element (car a-list)))
+                lof-elements) #t]
         [(list? (car a-list)) (or (apply find (cons lof-elements (car a-list)))
                                   (apply find (cons lof-elements (cdr a-list))))]
         [else (apply find (cons lof-elements (cdr a-list)))]))
@@ -195,11 +202,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define registers (make-vector (expt 2 REGISTER-N-WIDTH) 0))
 
+(define (registers-reset!)
+  (set! registers (make-vector (expt 2 REGISTER-N-WIDTH) 0)))
+
 (define (r! reg val)
   (vector-set! registers reg val))
 
 (define (r$ reg)
   (vector-ref registers reg))
+
+(define (test-procedure)
+  (define registers (vector 1 2 3))
+  (r! 0 10))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -207,7 +221,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define user-registers (make-hash))
 
-(define (reset-user-registers!)
+(define (user-registers-reset!)
   (set! user-registers (make-hash)))
 
 (define (user-register-set! reg val)
@@ -221,10 +235,20 @@
 
 (define-syntax define-user-register
   (syntax-rules ()
-    [(_ name initial-value)
+    [(_ name)
      (begin
        (define name 'name)
-       (hash-set! user-registers 'name initial-value))]))
+       (unless (user-register-ref 'name)
+         (hash-set! user-registers 'name 0)))]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Program counter
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define pc 0)
+(define (pc-set! val) (set! pc val))
+(define (pc-ref) pc)
+(define (pc-increase!) (pc-set! (+ 1 (pc-ref))))
+(define (pc-reset!) (set! pc 0))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -241,22 +265,11 @@
 (define clock-cycle initial-clock-cycle)
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Program counter
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define pc 0)
-(define (pc-set! val) (set! pc val))
-(define (pc-ref) pc)
-(define (pc-increase!) (pc-set! (+ 1 (pc-ref))))
-(define (pc-reset!) (set! pc 0))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Prepare for instruction generation
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define id (id-make))
-(define instructions (instructions-make))
-(reset-instructions!)
+(define (reset-environment!)
+  (registers-reset!)
+  (user-registers-reset!)
+  (pc-reset!)
+  (clock-cycle-reset!))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -266,11 +279,19 @@
   (r! reg val))
 
 (define-instruction (asip-wait cycles)
-  (define-user-register counter cycles)
-  (unless (zero? (user-register-ref counter))
-    (user-register-set! counter (- (user-register-ref counter) 1)))
-  
-  )
+  (define-user-register counter)
+  (define-user-register started)
+  (when (= (user-register-ref started) 0)
+    (user-register-set! started 1)
+    (user-register-set! counter cycles))
+  (when (= (user-register-ref started) 1)
+    (define c (user-register-ref counter))
+    (if (or (= c 1) (= c 0))
+        (begin
+          (pc-increase!)
+          (user-register-set! counter 0)
+          (user-register-set! started 0))
+        (user-register-set! counter (- c 1)))))
 
 (define-instruction (asip-jump line)
   (pc-set! line))
@@ -294,14 +315,35 @@
  (asip-halt-mc))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Simulator
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (execute-until-finished instruction)
+  (printf "executing: ~a, pc: ~n" instruction )
+  (define pc-before pc)
+  (eval instruction)
+  (define pc-after pc)
+  (when (= pc-before pc-after) ;; execute again!
+    (execute-until-finished instruction)))
 
-(list
- (asip-set-rv-simulation 0 0)
- (asip-wait-simulation 50000000)
- (asip-add-rvr-simulation 0 1 0)
- (asip-eq-rvr-simulation 0 10 0)
- (asip-jump-if-true-simulation 6)
- (asip-jump-simulation 1)
- (asip-halt-simulation))
+(define-syntax make-simulator
+  (syntax-rules ()
+    [(_ instr1 ...)
+     (let ([instr (vector 'instr1 ...)])
+       (reset-environment!)
+       (lambda (msg)
+         (cond
+          [(symbol=? msg 'step)
+           (printf "instr: ~a~n" (vector-ref instr pc))
+           (eval (vector-ref instr pc))])))]))
 
+(define sim1 (make-simulator
+              (asip-set-rv-simulation 0 20)
+              (asip-set-rv-simulation 1 1)
+              (asip-set-rv-simulation 2 2)
+              (asip-set-rv-simulation 3 3)
+              (asip-set-rv-simulation 4 4)))
 
+(define (simulator-step a-sim) (a-sim 'step))
+
+(simulator-step sim1) registers
