@@ -265,6 +265,10 @@
 (define clock-cycle initial-clock-cycle)
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Reset simulation environment (but not the procedure
+;;; definitions)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (reset-environment!)
   (registers-reset!)
   (user-registers-reset!)
@@ -296,10 +300,18 @@
 (define-instruction (asip-jump line)
   (pc-set! line))
 
-(define-instruction (asip-jump-if-true line))
+(define-instruction (asip-jump-if-true line)
+  
+  )
 (define-instruction (asip-add-rvr reg val reg1))
-(define-instruction (asip-eq-rvr reg val reg1))
-(define-instruction (asip-halt))
+
+(define-instruction (asip-eq-rvr reg val reg1)
+  (if (= reg val)
+      (r! reg1 1)
+      (r! reg1 0)))
+
+(define-instruction (asip-halt)
+  (pc-set! (pc-ref)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -319,7 +331,7 @@
 ;;; Simulator
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (execute-until-finished instruction)
-  (printf "executing: ~a, pc: ~n" instruction )
+  (printf "executing: ~a, pc: ~n" instruction)
   (define pc-before pc)
   (eval instruction)
   (define pc-after pc)
@@ -342,7 +354,9 @@
               (asip-set-rv-simulation 1 1)
               (asip-set-rv-simulation 2 2)
               (asip-set-rv-simulation 3 3)
-              (asip-set-rv-simulation 4 4)))
+              (asip-set-rv-simulation 4 4)
+              (asip-wait-simulation 10)
+              (asip-halt-simulation)))
 
 (define (simulator-step a-sim) (a-sim 'step))
 
