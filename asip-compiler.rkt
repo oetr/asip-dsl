@@ -46,6 +46,7 @@
                      result)
       result))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Instructions have unique IDs
 ;;; Instruction symbols and their IDs are saved in a hash map
@@ -61,6 +62,7 @@
 (define (instruction-exists? instruction-name)
   (hash-ref instructions instruction-name #f))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ID will be associated with an instruction name
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -71,6 +73,7 @@
 
 (define (id-reset!)
   (set! id (id-make)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Update free ID and
@@ -83,6 +86,7 @@
   (instructions-reset!)
   (id-reset!))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Constants
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -91,6 +95,7 @@
 (define REGISTER-N-WIDTH  4)     ;; there are 2^4 registers
 (define LINE-N-WIDTH      10)    ;; 1024 lines in code!
 (define INSTRUCTION-WIDTH (+ OPERATION-WIDTH (* 3 REGISTER-N-WIDTH) REGISTER-WIDTH))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Store bit width of a key word
@@ -108,6 +113,25 @@
     (error 'lookup-width "Width of ~a is unknown.~n" definition))
   result)
 
+;; the naming conventions are r0---r15, val, line, cycles
+;; strips the name of 
+(define (normalize-name a-symbol)
+  (cond
+   [(or (symbol=? a-symbol 'val)
+        (symbol=? a-symbol 'line)
+        (symbol=? a-symbol 'cycles)) a-symbol]
+   ;; try to see whether the string is a register
+   [else
+    (define a-string (symbol->string a-symbol))
+    (define string-root (regexp-match #px"[[:alpha:]]+" a-string))
+    (when string-root
+      (match (car string-root)
+        ["reg" 'reg]
+        [else (error
+               'normalize-name
+               "Name ~a does not follow the naming conventions~n" a-symbol)]))]))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Macro to define a procedure that is converted into a string
 ;; after it is run
@@ -122,13 +146,92 @@
          (add-instruction! 'name id))
        ;; generate appropriate names
        (define arguments-and-width (for/list ([n (in-list 'args)])
-                                     (list (gensym n)
-                                           (lookup-width n))))
-       (define arguments (cons 'name (map car arguments-and-width)))
+                                     (list n (lookup-width (normalize-name n)))))
+       (define arguments (map car arguments-and-width))
        (define widths (append (flatten (reverse arguments-and-width))
                               (list closure-id OPERATION-WIDTH)))
-       (eval `(define ,arguments
-                (n->binary* ,INSTRUCTION-WIDTH . ,widths))))]))
+       ;; prepare the name strings
+       (define name-string (symbol->string 'name))
+       ;;(printf "name-string: ~a~n" name-string)
+       (define simulation-name
+         (string->symbol (string-append name-string "-simulation")))
+       (define machine-code-name
+         (string->symbol (string-append name-string "-mc")))
+       (define vhdl-name
+         (string->symbol (string-append name-string "-vhdl")))
+       ;; define appropriate procedures
+       ;; procedure to convert the code into machine code
+       (eval `(define (,machine-code-name . ,arguments)
+                (n->binary* ,INSTRUCTION-WIDTH . ,widths)))
+       ;; procedure to run the code in simulation
+       (eval `(define (,simulation-name . ,arguments)
+                body ...))
+       (printf "~a~n" 'body)
+       ...
+       )]))
+
+
+;; -----------------------------------------------------------
+;; Simulation environment
+;; -----------------------------------------------------------
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Standard registers
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define registers (make-vector (expt 2 REGISTER-N-WIDTH) 0))
+
+(define (r! reg val)
+  (vector-set! registers reg val))
+
+(define (r$ reg)
+  (vector-ref registers reg))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; User-defined registers
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define user-registers (make-hash))
+
+(define (reset-user-registers!)
+  (set! user-registers (make-hash)))
+
+(define (user-register-set! reg val)
+  (hash-set! user-registers reg val))
+
+(define (user-register-ref reg)
+  (hash-ref user-registers reg #f))
+
+(define (define-user-register name initial-value)
+  (hash-set! user-registers name initial-value))
+
+(define-syntax define-user-register
+  (syntax-rules ()
+    [(_ name initial-value)
+     (begin
+       (define name 'name)
+       (hash-set! user-registers 'name initial-value))]))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Clock cycle of the system
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (clock-cycle-increase!)
+  (set! current-clock-cycle
+        (+ current-clock-cycle 1)))
+
+(define (clock-cycle-reset!) (set! clock-cycle initial-clock-cycle))
+
+(define initial-clock-cycle 0)
+
+(define clock-cycle initial-clock-cycle)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Program counter
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define pc 0)
+(define (pc-set! val) (set! pc val))
+(define (pc-reset!) (set! pc 0)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Prepare for instruction generation
@@ -137,25 +240,35 @@
 (define instructions (instructions-make))
 (reset-instructions!)
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Instructions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-instruction (asip-set-rv reg val))
-(define-instruction (asip-wait cycles))
+(define-instruction (asip-set-rv reg val)
+  (r! reg val))
+
+(define-instruction (asip-wait cycles)
+  (define-user-register counter cycles)
+  (unless (zero? (user-register-ref counter))
+    (user-register-set! counter (- (user-register-ref counter) 1)))
+  
+  )
+
 (define-instruction (asip-jump line))
 (define-instruction (asip-jump-if-true line))
-(define-instruction (asip-add-rvr reg val reg))
-(define-instruction (asip-eq-rvr reg val reg))
+(define-instruction (asip-add-rvr reg val reg1))
+(define-instruction (asip-eq-rvr reg val reg1))
 (define-instruction (asip-halt))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Code
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (list
- (asip-set-rv 0 0)
- (asip-wait 50000000)
- (asip-add-rvr 0 1 0)
- (asip-eq-rvr 0 10 0)
- (asip-jump-if-true 6)
- (asip-jump 1)
- (asip-halt))
+ (asip-set-rv-mc 0 0)
+ (asip-wait-mc 50000000)
+ (asip-add-rvr-mc 0 1 0)
+ (asip-eq-rvr-mc 0 10 0)
+ (asip-jump-if-true-mc 6)
+ (asip-jump-mc 1)
+ (asip-halt-mc))
