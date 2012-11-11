@@ -16,11 +16,6 @@
          (racket-symbol->vhdl-symbol a-name)
          (racket-symbol->vhdl-symbol 'a-name))]))
 
-(define (convert-constant name value)
-  (if (number? value)
-      (~a "constant " name " : integer := " value ";\n")
-      (error "the value of the constant is not a number~n")))
-
 (define-syntax convert-constants*
   (syntax-rules ()
     [(_  name1 ...)
@@ -30,7 +25,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Register definitons -> VHDL
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (define-syntax convert-register-types
   (syntax-rules ()
     [(_ register-width register-n-width)
