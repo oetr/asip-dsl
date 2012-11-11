@@ -34,6 +34,25 @@
       "-1) of\n register_type;\n")]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Opcodes
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-syntax macro-map
+  (syntax-rules ()
+    [(_ macro a-list)
+     (map (lambda (arg)
+            (macro arg))
+          a-list)]))
+
+(define-syntax convert-opcodes
+  (syntax-rules ()
+    [(_ opcodes)
+     (~a
+      "type opcodes is ("
+      (apply (curry ~a #:separator ", ")
+             (macro-map ->vhdl-name opcodes))
+      ");\n")]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Machine Code
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (convert-machine-code mc)
@@ -75,6 +94,10 @@
                        LINE-N-WIDTH
                        INSTRUCTION-WIDTH) nl
    "  --------------------------------------------------------------------" nl
+   "  -- Opcodes"nl
+   "  --------------------------------------------------------------------" nl
+   (convert-opcodes (get-instructions))
+   "  --------------------------------------------------------------------" nl
    "  -- Registers"nl
    "  --------------------------------------------------------------------" nl
    (convert-register-types REGISTER-WIDTH REGISTER-N-WIDTH) nl
@@ -84,6 +107,5 @@
    (convert-machine-code mc) nl
    ;; finish library
    "end package instructions_lib;"nl))
-
 
 (display-to-file (generate-library-file mc) "test.vhd" #:exists 'replace)

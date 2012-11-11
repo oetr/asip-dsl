@@ -62,6 +62,9 @@
 (define (instruction-exists? instruction-name)
   (hash-ref instructions instruction-name #f))
 
+(define (get-instructions)
+  (hash-keys instructions))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ID will be associated with an instruction name
@@ -85,6 +88,7 @@
 (define (reset-instructions!)
   (instructions-reset!)
   (id-reset!))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Prepare for instruction generation
