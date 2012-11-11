@@ -312,14 +312,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Code
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(list
- (asip-set-rv-mc 0 0)
- (asip-wait-mc 50000000)
- (asip-add-rvr-mc 0 1 0)
- (asip-eq-rvr-mc 0 10 0)
- (asip-jump-if-true-mc 6)
- (asip-jump-mc 1)
- (asip-halt-mc))
+(define mc
+  (list
+   (asip-set-rv-mc 0 0)
+   (asip-wait-mc 50000000)
+   (asip-add-rvr-mc 0 1 0)
+   (asip-eq-rvr-mc 0 10 0)
+   (asip-jump-if-true-mc 6)
+   (asip-jump-mc 1)
+   (asip-halt-mc)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
