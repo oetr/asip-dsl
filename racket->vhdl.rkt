@@ -12,9 +12,10 @@
 (define-syntax ->vhdl-name
   (syntax-rules ()
     [(_  a-name)
-     (if (symbol? a-name)
-         (racket-symbol->vhdl-symbol a-name)
-         (racket-symbol->vhdl-symbol 'a-name))]))
+     (begin
+       (if (symbol? a-name)
+           (racket-symbol->vhdl-symbol a-name)
+           (racket-symbol->vhdl-symbol 'a-name)))]))
 
 (define-syntax convert-constants*
   (syntax-rules ()
@@ -107,5 +108,61 @@
    (convert-machine-code mc) nl
    ;; finish library
    "end package instructions_lib;"nl))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Define I/O ports
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; assume it's always std-logic-vector
+;; signal type is then defined by a list '(a . b)
+;; -> std_logic_vector(a downto b);
+(define (convert-io a-list)
+  (printf "length of the list: ~a~n" a-list)
+  (define type #f)
+  (if (= 2 (length a-list))
+      (set! type "std_logic")
+      (set! type (~a "std_logic_vector(" (caddr a-list) " downto "
+                     (cadddr a-list) ")")))
+  (~a (car a-list) " : " (cadr a-list) " " type))
+
+(define (define-ios io-list)
+  (string-append (apply (curry ~a #:separator ";\n")
+                       (map (lambda (one-io)
+                              (convert-io one-io)) io-list))
+                 "\n"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Generate the main file
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (generate-main-file i/o)
+  (define nl "\n")
+  (~a
+   ;; make a header
+   "library ieee;" nl
+   "use ieee.std_logic_1164.all;" nl
+   "use ieee.numeric_std.all;" nl
+   "use work.instructions_lib.all;" nl
+   "----------------------------------------------------------------------" nl
+   "entity asip is" nl
+   "port (" nl
+   (define-ios i/o) ");" nl
+   "end entity asip;" nl
+   "----------------------------------------------------------------------" nl
+   "architecture arch of asip is" nl
+   "  --------------------------------------------------------------------" nl
+   "  -- Signals"nl
+   "  --------------------------------------------------------------------" nl
+   "begin" nl
+   "  --------------------------------------------------------------------" nl
+   "  -- Rising edge process"nl
+   "  --------------------------------------------------------------------" nl
+   "  process (clk, reset) is" nl
+   "  begin" nl
+   "    if reset = '1' then" nl
+   "      registers_reg    <= (others => (others => '0'));" nl
+
+   ))
+
+(printf (generate-main-file '((iCLK in))))
 
 (display-to-file (generate-library-file mc) "test.vhd" #:exists 'replace)
