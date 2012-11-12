@@ -17,6 +17,11 @@
            (racket-symbol->vhdl-symbol a-name)
            (racket-symbol->vhdl-symbol 'a-name)))]))
 
+(define (convert-constant name value (type "integer"))
+  (if (string=? type "integer")
+      (~a "constant " name " : " type " := " value ";\n")
+      (~a "constant " name " : " type " := \"" value "\";\n")))
+
 (define-syntax convert-constants*
   (syntax-rules ()
     [(_  name1 ...)
@@ -29,10 +34,12 @@
 (define-syntax convert-register-types
   (syntax-rules ()
     [(_ register-width register-n-width)
-     (~a "subtype register_type is std_logic_vector(" (->vhdl-name 'register-width)
-      "-1 downto 0);\n"
-      "type regs_type is array (natural range 0 to 2**" (->vhdl-name 'register-n-width)
-      "-1) of\n register_type;\n")]))
+     (~a "subtype register_type is std_logic_vector("
+         (->vhdl-name 'register-width)
+         "-1 downto 0);\n"
+         "type regs_type is array (natural range 0 to 2**"
+         (->vhdl-name 'register-n-width)
+         "-1) of\n register_type;\n")]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Opcodes
@@ -44,14 +51,17 @@
             (macro arg))
           a-list)]))
 
-(define-syntax convert-opcodes
+(define-syntax define-opcodes
   (syntax-rules ()
-    [(_ opcodes)
-     (~a
-      "type opcodes is ("
-      (apply (curry ~a #:separator ", ")
-             (macro-map ->vhdl-name opcodes))
-      ");\n")]))
+    [(_ instructions)
+     (let ([type (~a "std_logic_vector(" (->vhdl-name OPERATION-WIDTH)
+                     "-1 downto 0)")])
+       (apply ~a
+              (hash-map instructions
+                        (lambda (index value)
+                          (convert-constant (->vhdl-name index)
+                                            (n->binary value OPERATION-WIDTH)
+                                            type)))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Machine Code
@@ -97,7 +107,7 @@
    "  --------------------------------------------------------------------" nl
    "  -- Opcodes"nl
    "  --------------------------------------------------------------------" nl
-   (convert-opcodes (get-instructions))
+   (define-opcodes instructions)
    "  --------------------------------------------------------------------" nl
    "  -- Registers"nl
    "  --------------------------------------------------------------------" nl
@@ -127,9 +137,86 @@
 
 (define (define-ios io-list)
   (string-append (apply (curry ~a #:separator ";\n")
-                       (map (lambda (one-io)
-                              (convert-io one-io)) io-list))
+                        (map (lambda (one-io)
+                               (convert-io one-io)) io-list))
                  "\n"))
+
+(define (convert-type type (range1 #f) (dir #f) (range2 #f))
+  (define range #f)
+  (when (and range1 dir range2)
+    (set! range (~a range1 " " dir " " range2)))
+  ;; check the type
+  (match type
+    ['integer (~a type " range " range)]
+    ['std_logic_vector (~a type "(" range ")")]
+    [_ (~a type)]))
+
+(define (convert-signal name type (range1 #f) (range2 #f) (dir 'downto))
+  (~a "signal " name " : " (convert-type type range1 dir range2) ";\n"))
+
+(define (convert-register name type (range1 #f) (range2 #f) (dir 'downto))
+  (apply string-append
+         (map (lambda (reg-or-next)
+                (convert-signal (string-append (~a (symbol->string name) reg-or-next))
+                                type range1 range2 dir))
+              (list "_reg" "_next"))))
+
+;; registers is a hash map
+(define (registers-rising-edge-default registers)
+  (apply string-append
+         (hash-map registers
+                   (lambda (index value)
+                     (~a index "_reg <= (others <= '0');\n")))))
+
+(define (registers-assign-rising-edge registers (dir 'reg->next))
+  (define from "_next")
+  (define to "_reg")
+  (when (symbol=? dir 'next->reg)
+    (set! from "_reg")
+    (set! to "_next"))
+  (apply string-append
+         (hash-map registers
+                   (lambda (index value)
+                     (~a index to " <= " index from ";\n")))))
+
+(define (add-user-registers-to-comb-process user-registers)
+  (define result 
+    (apply (curry ~a #:separator ", ")
+           (hash-map user-registers (lambda (index val)
+                                      (string-append
+                                       (symbol->string index) "_reg")))))
+  (if (string=? result "")
+      ""
+      (string-append ", " result)))
+
+(define (define-functions)
+  "function get_i (
+      constant hi : integer;
+      constant low : integer)
+      return integer is
+    begin
+        return to_integer(unsigned(instruction(hi downto low)));
+    end function get_i;
+
+    function get_s (
+      constant hi : integer;
+      constant low : integer)
+      return std_logic_vector is
+    begin
+        return instruction(hi downto low);
+    end function get_s;
+
+    function get_u (
+      constant hi : integer;
+      constant low : integer)
+      return unsigned is
+    begin
+        return unsigned(instruction(hi downto low));
+    end function get_u;")
+
+
+(define (interpret-ops instructions)
+  )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Generate the main file
@@ -152,6 +239,17 @@
    "  --------------------------------------------------------------------" nl
    "  -- Signals"nl
    "  --------------------------------------------------------------------" nl
+   "signal registers_reg  : regs_type;" nl
+   "signal registers_next : regs_type;" nl
+   (convert-register 'pc 'integer 0 (sub1 (expt 2 LINE-N-WIDTH)) 'to)
+   (apply string-append (hash-map user-registers
+                                  (lambda (name data)
+                                    (define type (register-type data))
+                                    (convert-register name
+                                                      (type-name type)
+                                                      (type-range1 type)
+                                                      (type-range2 type)
+                                                      (type-dir type)))))
    "begin" nl
    "  --------------------------------------------------------------------" nl
    "  -- Rising edge process"nl
@@ -160,9 +258,94 @@
    "  begin" nl
    "    if reset = '1' then" nl
    "      registers_reg    <= (others => (others => '0'));" nl
+   "      pc_reg    <= 0;" nl
+   "      -- user registers" nl
+   (registers-rising-edge-default user-registers)
+   "      elsif rising_edge(clk) then" nl
+   "      registers_reg    <= registers_next;" nl
+   "      pc_reg    <= pc_next;" nl
+   (registers-assign-rising-edge user-registers)
+   "    end if;" nl
+   "  end process;" nl
 
+   "--------------------------------------------------------------------" nl
+   "-- Instruction interpreter" nl
+   "--------------------------------------------------------------------" nl
+   "process (registers_reg, pc_reg"
+   (add-user-registers-to-comb-process user-registers)
+   ") is" nl
+   "variable instruction      : std_logic_vector(" (->vhdl-name INSTRUCTION-WIDTH)
+   "-1 downto 0);" nl
+   "   variable op : std_logic_vector(" (->vhdl-name OPERATION-WIDTH)
+   "-1 downto 0);" nl
+   (define-functions)
+   "begin" nl
+   "      -- default assignments" nl
+   "      registers_next <= registers_reg;" nl
+   "      pc_next <= pc_reg;" nl
+   (registers-assign-rising-edge user-registers 'next->reg)
+   "-- Decode the operations" nl
+   "instruction := instructions(pc_reg);" nl
+   "op := instruction(" (->vhdl-name OPERATION-WIDTH) "-1 downto 0);" nl
+   "-- Interpret operations" nl
+   "case op is" nl
+   ;;(interpret-ops instructions)
+   
+   "end process;" nl
+   
+   "end architecture arch;" nl
    ))
 
-(printf (generate-main-file '((iCLK in))))
+(printf (generate-main-file '((iCLK in)
+                              (test inout))))
 
 (display-to-file (generate-library-file mc) "test.vhd" #:exists 'replace)
+
+
+
+
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Showing Shima that code is data
+;;; TODO: Maybe better to not use macros and use lambdas instead
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (test num)
+  (printf "~a~n" 'num))
+
+(define-syntax test-m
+  (syntax-rules ()
+    [(_ num)
+     (printf "~a~n" (string-append (symbol->string 'num)
+                                   "-test"))]))
+
+(define (my-fun arg1 arg2)
+  (+ arg1 arg2))
+
+(define-syntax define-proc+description
+  (syntax-rules ()
+    [(_ (name . args) body ...)
+     (begin
+       (define (name . args)
+         body
+         ...)
+       (define description-name (string->symbol
+                                 (string-append (symbol->string 'name)
+                                                "-description")))
+       (eval `(define ,description-name '(args body ...))))]))
+
+(define-proc+description (t1 n n1 n2)
+  (+ (* n 10) n1 n2)
+  (+ (* n 10) n1 n2)
+  )
+
+(define-syntax define-from-description
+  (syntax-rules ()
+    [(_ description)
+     (eval `(lambda ,(car description)
+              ,(car (cdr description))))]))

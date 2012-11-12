@@ -63,6 +63,30 @@ begin
     variable val              : std_logic_vector(REG_WIDTH-1 downto 0);
     variable wait_cycles : std_logic_vector(INSTR_WIDTH - INSTR_NAME_WIDTH - 1
                                             downto 0);
+    function get_i (
+      constant hi : integer;
+      constant low : integer)
+      return integer is
+    begin
+        return to_integer(unsigned(instruction(hi downto low)));
+    end function get_i;
+
+    function get_s (
+      constant hi : integer;
+      constant low : integer)
+      return std_logic_vector is
+    begin
+        return instruction(hi downto low);
+    end function get_s;
+
+    function get_u (
+      constant hi : integer;
+      constant low : integer)
+      return unsigned is
+    begin
+        return unsigned(instruction(hi downto low));
+    end function get_u;
+    
   begin
     -- default assignments
     registers_next    <= registers_reg;

@@ -154,13 +154,31 @@
                                   (apply find (cons lof-elements (cdr a-list))))]
         [else (apply find (cons lof-elements (cdr a-list)))]))
 
+;; given a list of numbers, return a list of consed pairs for each number
+;; the returned numbers specify the start and the end of each number
+;; Example: (compute-range 1 2 3)
+;; -> '((0 . 0) (1 . 2) (3 . 5))
+(define (compute-range . args)
+  (define start 0)
+  (for/list ([element (in-list args)])
+    (define temp-start  start)
+    (set! start (+ start element))
+    (list element temp-start (- start 1))))
+
+(define (make-names . args)
+  (for/list ([element (in-list args)])
+    (define str (symbol->string element))
+    (list element
+          (string->symbol (string-append str"-low"))
+          (string->symbol (string-append str"-hi")))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Macro to define a procedure that is converted into a string
 ;; after it is run
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax define-instruction
-  (syntax-rules ()
-    [(_ (name . args) body ...)
+  (syntax-rules (racket vhdl)
+    [(_ (name . args) (racket body-r ...) (vhdl body-v ...))
      (begin
        (define closure-id (instruction-exists? 'name))
        (unless closure-id
@@ -169,7 +187,10 @@
        ;; generate appropriate names
        (define arguments-and-width (for/list ([n (in-list 'args)])
                                      (list n (lookup-width (normalize-name n)))))
+       (printf "test: ~a~n" arguments-and-width)
        (define arguments (map car arguments-and-width))
+       (define all-widths (append (reverse arguments-and-width)
+                              (list (list closure-id OPERATION-WIDTH))))
        (define widths (append (flatten (reverse arguments-and-width))
                               (list closure-id OPERATION-WIDTH)))
        ;; prepare the name strings
@@ -188,15 +209,24 @@
        ;; procedure to run the code in simulation
        ;; analyze the procedure's body to see if the
        ;; program counter gets incremented somewhere
-       (define manipulates-pc? (find '(pc-set! pc-increase!) 'body ...))
+       (define manipulates-pc? (find '(pc-set! pc-increase!) 'body-r ...))
        (define definition `(define (,simulation-name . ,arguments)
-                             body ...))
+                             body-r ...))
+       ;; (define temp (map (append arguments-and-width
+       ;;                           `((op ,OPERATION-WIDTH))))
+       (define ranges (flatten (apply compute-range (reverse (map cadr all-widths)))))
+       (define names (flatten (apply make-names (cons 'op 'args))))
+       (eval `(define ,vhdl-name
+                (begin
+                  (let ,(map list names ranges)
+                    body-v
+                    ...))))
        (unless manipulates-pc?
          (set! definition (append definition `((,pc-increase!)))))
        (eval definition)
+       ;;(eval definition-vhdl)
        (pretty-print definition)
        )]))
-
 
 ;; -----------------------------------------------------------
 ;; Simulation environment
@@ -223,24 +253,48 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; User-defined registers
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;(struct register (type val) #:mutable #:transparent)
+(define (make-register type val)
+  (vector type val))
+
 (define user-registers (make-hash))
 
+(define (register-type a-reg) (vector-ref a-reg 0))
+(define (register-val a-reg) (vector-ref a-reg 1))
+(define (register-val-set! a-reg val) (vector-set! a-reg 1 val))
+;;(define (register-val-ref name val) ((vector-ref a-reg 1))
+
+
 (define (user-registers-reset!)
-  (set! user-registers (make-hash)))
+  ;; run over all registers and set the values to zero
+  (hash-for-each user-registers
+                 (lambda (name a-vector)
+                   (register-val-set! a-vector 0))))
 
 (define-syntax user-register-set!
   (syntax-rules ()
     [(_ name val)
-     (hash-set! user-registers 'name val)]))
+     (register-val-set! (hash-ref user-registers 'name) val)]))
 
 (define-syntax user-register-ref
   (syntax-rules ()
     [(_ name)
      (begin
        (unless (hash-ref user-registers 'name #f)
-         (hash-set! user-registers 'name 0))
-       (hash-ref user-registers 'name #f))]))
+         (error "Define the type~n"))
+       (register-val (hash-ref user-registers 'name)))]))
 
+(define (define-type name (range1 #f) (range2 #f) (dir 'downto))
+  (vector name range1 range2 dir))
+
+(define (type-name a-type)   (vector-ref a-type 0))
+(define (type-range1 a-type) (vector-ref a-type 1))
+(define (type-range2 a-type) (vector-ref a-type 2))
+(define (type-dir a-type)    (vector-ref a-type 3))
+
+(define (define-user-register name type (range1 #f) (range2 #f) (dir 'downto))
+  (hash-set! user-registers name
+             (make-register (define-type type range1 range2 dir) 0)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Program counter
@@ -280,21 +334,48 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Instructions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; define user registers
+(define-user-register 'counter 'integer 0 (sub1 (expt 2 REGISTER-WIDTH)) 'to)
+(define-user-register 'started 'std_logic)
+
+;; define user variables
 (define-instruction (asip-set-rv reg val)
-  (r! reg val))
+  (racket
+   (r! reg val))
+  (vhdl
+   (let ([nl "\n"])
+     (~a
+      "registers_next(get_i(" reg-hi ", " reg-low"))"
+      "<= get_s("val-hi ", " val-low ");" nl))))
+
 
 (define-instruction (asip-wait cycles)
-  (when (= (user-register-ref started) 1)
-    (define c (user-register-ref counter))
-    (if (or (= c 1) (= c 0))
-        (begin
-          (pc-increase!)
-          (user-register-set! counter 0)
-          (user-register-set! started 0))
-        (user-register-set! counter (- c 1))))
-  (when (= (user-register-ref started) 0)
-    (user-register-set! started 1)
-    (user-register-set! counter cycles)))
+  (racket
+   (when (= (user-register-ref started) 1)
+     (define c (user-register-ref counter))
+     (if (or (= c 1) (= c 0))
+         (begin
+           (pc-increase!)
+           (user-register-set! counter 0)
+           (user-register-set! started 0))
+         (user-register-set! counter (- c 1))))
+   (when (= (user-register-ref started) 0)
+     (user-register-set! started 1)
+     (user-register-set! counter cycles)))
+  (vhdl
+   "-- allow to wait for one clock cycle
+        if wait_cycles = std_logic_vector(to_unsigned(1, wait_cycles'length)) then
+          i_next <= i_reg + 1;
+        elsif (not started_reg) then
+          wait_counter_next <= unsigned(wait_cycles);
+          started_next      <= true;
+        else                            -- count down
+          wait_counter_next <= wait_counter_reg - 1;
+          if wait_counter_reg = 0 then
+            started_next <= false;
+            i_next       <= i_reg + 1;
+          end if;
+        end if;\n"))
 
 (define-instruction (asip-jump line)
   (pc-set! line))
