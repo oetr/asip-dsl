@@ -190,7 +190,7 @@
        (printf "test: ~a~n" arguments-and-width)
        (define arguments (map car arguments-and-width))
        (define all-widths (append (reverse arguments-and-width)
-                              (list (list closure-id OPERATION-WIDTH))))
+                                  (list (list closure-id OPERATION-WIDTH))))
        (define widths (append (flatten (reverse arguments-and-width))
                               (list closure-id OPERATION-WIDTH)))
        ;; prepare the name strings
@@ -210,22 +210,24 @@
        ;; analyze the procedure's body to see if the
        ;; program counter gets incremented somewhere
        (define manipulates-pc? (find '(pc-set! pc-increase!) 'body-r ...))
-       (define definition `(define (,simulation-name . ,arguments)
-                             body-r ...))
-       ;; (define temp (map (append arguments-and-width
-       ;;                           `((op ,OPERATION-WIDTH))))
+       (define definition-racket `(define (,simulation-name . ,arguments)
+                                    body-r ...))
+        (unless manipulates-pc?
+          (set! definition-racket (append definition-racket `((,pc-increase!)))))
+       ;; translate racket->vhdl
        (define ranges (flatten (apply compute-range (reverse (map cadr all-widths)))))
        (define names (flatten (apply make-names (cons 'op 'args))))
-       (eval `(define ,vhdl-name
-                (begin
-                  (let ,(map list names ranges)
-                    body-v
-                    ...))))
-       (unless manipulates-pc?
-         (set! definition (append definition `((,pc-increase!)))))
-       (eval definition)
-       ;;(eval definition-vhdl)
-       (pretty-print definition)
+       (define definition-vhdl `(define ,vhdl-name
+                                  (string-append
+                                   (let ,(map list names ranges)
+                                     (define nl "\n") ;; to not do it many times
+                                     
+                                     body-v ...)
+                                   ,(if  manipulates-pc?
+                                         "" '(increment-pc)))))
+       (pretty-print definition-vhdl)
+       (eval definition-vhdl)
+       (eval definition-racket)
        )]))
 
 ;; -----------------------------------------------------------
@@ -330,23 +332,71 @@
   (pc-reset!)
   (clock-cycle-reset!))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Helper functions to make VHDL generation easier
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (get-i high low)
+  (~a "get_i(" high", " low")"))
+
+(define (get-u high low)
+  (~a "get_u(" high", " low")"))
+
+(define (get-s high low)
+  (~a "get_s(" high", " low")"))
+
+(define (set-register reg new-value)
+  (~a "registers_next(" reg ") <= " new-value ";"))
+
+(define (set-user-register name new-value)
+  (~a name "_next <= " new-value ";"))
+
+(define (get-user-register name)
+  (~a name "_reg"))
+
+(define (get-register reg)
+  (~a "registers_reg(" reg ")"))
+
+(define (increment-pc)
+  "pc_next <= pc_reg + 1;\n")
+
+(define (set-pc val)
+  (~a "pc_next <= " val ";\n"))
+
+(define (get-pc)
+  "pc_reg")
+
+(define (s->u val)
+  (~a "unsigned(" val")"))
+
+(define (u->i val)
+  (~a "to_integer(" val")"))
+
+(define (s->i val)
+  (u->i (s->u val)))
+
+(define (u->s val)
+  (~a "std_logic_vector(" val")"))
+
+(define (i->u val width)
+  (~a "to_unsigned(" val ", " width")"))
+
+(define (i->s val width)
+  (u->s (i->u val width)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Instructions
+;;; Operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; define user registers
-(define-user-register 'counter 'integer 0 (sub1 (expt 2 REGISTER-WIDTH)) 'to)
+(define-user-register 'counter 'integer);; 0 (sub1 (expt 2 REGISTER-WIDTH)) 'to)
 (define-user-register 'started 'std_logic)
+(define-user-register 'if 'std_logic)
 
-;; define user variables
+;; define user operations
 (define-instruction (asip-set-rv reg val)
   (racket
    (r! reg val))
   (vhdl
-   (let ([nl "\n"])
-     (~a
-      "registers_next(get_i(" reg-hi ", " reg-low"))"
-      "<= get_s("val-hi ", " val-low ");" nl))))
+   (~a (set-register (get-i reg-hi reg-low) (get-s val-hi val-low)) nl)))
 
 
 (define-instruction (asip-wait cycles)
@@ -363,35 +413,67 @@
      (user-register-set! started 1)
      (user-register-set! counter cycles)))
   (vhdl
-   "-- allow to wait for one clock cycle
-        if wait_cycles = std_logic_vector(to_unsigned(1, wait_cycles'length)) then
-          i_next <= i_reg + 1;
-        elsif (not started_reg) then
-          wait_counter_next <= unsigned(wait_cycles);
-          started_next      <= true;
-        else                            -- count down
-          wait_counter_next <= wait_counter_reg - 1;
-          if wait_counter_reg = 0 then
-            started_next <= false;
-            i_next       <= i_reg + 1;
-          end if;
-        end if;\n"))
+   (~a
+    "-- allow to wait for one clock cycle" nl
+    "if " (get-i cycles-hi cycles-low) " = 1 then" nl
+    (increment-pc)
+    "elsif started_reg = '0' then" nl
+    "counter_next <= "(get-i cycles-hi cycles-low) ";" nl
+    "started_next      <= '1';" nl
+    "else                            -- count down" nl
+    "counter_next <= counter_reg - 1;" nl
+    "if counter_reg = 0 then" nl
+    "started_next <= '0';" nl
+    (increment-pc)
+    "end if;" nl
+    "end if;" nl)))
+
 
 (define-instruction (asip-jump line)
-  (pc-set! line))
+  (racket (pc-set! line))
+  (vhdl (~a (set-pc (get-i line-hi line-low)))))
+
 
 (define-instruction (asip-jump-if-true line)
-  
-  )
-(define-instruction (asip-add-rvr reg val reg1))
+  (racket
+   (if (zero? (user-register-ref if))
+       (pc-increase!)
+       (pc-set! line)))
+  (vhdl
+   (~a
+    "if " (get-user-register 'if) "= '0' then" nl
+    (increment-pc)
+    "else" nl
+    (set-pc (get-i line-hi line-low))
+    "end if;" nl)))
 
-(define-instruction (asip-eq-rvr reg val reg1)
-  (if (= reg val)
-      (r! reg1 1)
-      (r! reg1 0)))
+(define-instruction (asip-add-rvr reg val reg1)
+  (racket
+   (r! reg1 (+ (r$ reg) val)))
+  (vhdl
+   (~a
+    (set-register (get-i reg1-hi reg1-low)
+                  (i->s (~a (get-i val-hi val-low) " + "
+                            (s->i (get-register (get-i reg1-hi reg1-low))))
+                        val)) nl)))
+
+(define-instruction (asip-eq-rv reg val)
+  (racket
+   (if (= (r$ reg) val)
+       (user-register-set! if 1)
+       (user-register-set! if 0)))
+  (vhdl
+   (~a "if " (get-register (get-i reg-hi reg-low)) " = "
+       (get-s val-hi val-low) " then" nl
+       (set-user-register 'if "'1'") nl
+       "else" nl
+       (set-user-register 'if "'0'") nl
+       "end if;" nl)))
+
 
 (define-instruction (asip-halt)
-  (pc-set! (pc-ref)))
+  (racket (pc-set! (pc-ref)))
+  (vhdl (set-pc (get-pc))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -402,11 +484,10 @@
    (asip-set-rv-mc 0 0)
    (asip-wait-mc 50000000)
    (asip-add-rvr-mc 0 1 0)
-   (asip-eq-rvr-mc 0 10 0)
+   (asip-eq-rvr-mc 0 10)
    (asip-jump-if-true-mc 6)
    (asip-jump-mc 1)
    (asip-halt-mc)))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Simulator
@@ -426,15 +507,16 @@
        (lambda (msg)
          (cond
           [(symbol=? msg 'step)
+           (printf "~a~n" (vector-ref instr pc))
            (eval (vector-ref instr pc))])))]))
 
 (define sim1 (make-simulator
-              (asip-set-rv-simulation 0 20)
-              (asip-set-rv-simulation 1 1)
-              (asip-set-rv-simulation 2 2)
-              (asip-set-rv-simulation 3 3)
-              (asip-set-rv-simulation 4 4)
-              (asip-wait-simulation 10)
+              (asip-set-rv-simulation 0 0)
+              (asip-wait-simulation 1)
+              (asip-add-rvr-simulation 0 1 0)
+              (asip-eq-rvr-simulation 0 10)
+              (asip-jump-if-true-simulation 6)
+              (asip-jump-simulation 1)
               (asip-halt-simulation)))
 
 (define (simulator-step a-sim) (a-sim 'step))
@@ -442,15 +524,16 @@
 (define (show-environment)
   (printf "PC:        ~a~n" pc)
   (printf "regs:      ~a~n" registers)
-  (printf "user-regs: ~a~n~n" user-registers))
+  (printf "user-regs: ")
+  (pretty-print user-registers))
 
 (define (simulator-run sim steps (debug #f))
-  (when debug
-    (printf "----- Simulation Start -------~n")
-    (show-environment))
+  ;; (when debug
+  ;;   (printf "~n----- Simulation Start -------~n")
+  ;;   (show-environment))
   (for ([step steps])
     (simulator-step sim1)
     (when debug
       (show-environment))))
 
-(simulator-run sim1 10 #t)
+(simulator-run sim1 1 #t)

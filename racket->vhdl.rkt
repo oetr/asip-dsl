@@ -95,7 +95,7 @@
    "use ieee.std_logic_1164.all;" nl
    "use ieee.numeric_std.all;" nl
    "----------------------------------------------------------------------" nl
-   "package instructions_lib is" nl
+   "package test is" nl
    "  --------------------------------------------------------------------" nl
    "  -- Constants"nl
    "  --------------------------------------------------------------------" nl
@@ -117,7 +117,7 @@
    "  --------------------------------------------------------------------" nl
    (convert-machine-code mc) nl
    ;; finish library
-   "end package instructions_lib;"nl))
+   "end package test;"nl))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Define I/O ports
@@ -147,7 +147,7 @@
     (set! range (~a range1 " " dir " " range2)))
   ;; check the type
   (match type
-    ['integer (~a type " range " range)]
+    ['integer (if range (~a type " range " range) (~a type))]
     ['std_logic_vector (~a type "(" range ")")]
     [_ (~a type)]))
 
@@ -166,7 +166,14 @@
   (apply string-append
          (hash-map registers
                    (lambda (index value)
-                     (~a index "_reg <= (others <= '0');\n")))))
+                     (define type (register-type (type-name value)))
+                     (cond [(symbol=? type 'std_logic)
+                            (~a index "_reg <= '0';\n")]
+                           [(symbol=? type 'integer)
+                            (~a index "_reg <= 0;\n")]
+                           [else
+                            (~a index "_reg <= (others <= '0');\n")])))))
+
 
 (define (registers-assign-rising-edge registers (dir 'reg->next))
   (define from "_next")
@@ -218,6 +225,10 @@
 (define (interpret-ops instructions)
   )
 
+(define (symbol-append . symbols)
+  (string->symbol
+   (apply string-append (map symbol->string symbols))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Generate the main file
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -228,19 +239,20 @@
    "library ieee;" nl
    "use ieee.std_logic_1164.all;" nl
    "use ieee.numeric_std.all;" nl
-   "use work.instructions_lib.all;" nl
+   "use work.test.all;" nl
    "----------------------------------------------------------------------" nl
-   "entity asip is" nl
+   "entity main is" nl
    "port (" nl
    (define-ios i/o) ");" nl
-   "end entity asip;" nl
+   "end entity main;" nl
    "----------------------------------------------------------------------" nl
-   "architecture arch of asip is" nl
+   "architecture arch of main is" nl
    "  --------------------------------------------------------------------" nl
    "  -- Signals"nl
    "  --------------------------------------------------------------------" nl
-   "signal registers_reg  : regs_type;" nl
-   "signal registers_next : regs_type;" nl
+   "  signal reset, clk     : std_logic;" nl
+   "  signal registers_reg  : regs_type;" nl
+   "  signal registers_next : regs_type;" nl
    (convert-register 'pc 'integer 0 (sub1 (expt 2 LINE-N-WIDTH)) 'to)
    (apply string-append (hash-map user-registers
                                   (lambda (name data)
@@ -251,6 +263,8 @@
                                                       (type-range2 type)
                                                       (type-dir type)))))
    "begin" nl
+   "  reset <= not iKEY(0);" nl
+   "  clk   <= iCLK_50;" nl
    "  --------------------------------------------------------------------" nl
    "  -- Rising edge process"nl
    "  --------------------------------------------------------------------" nl
@@ -267,7 +281,6 @@
    (registers-assign-rising-edge user-registers)
    "    end if;" nl
    "  end process;" nl
-
    "--------------------------------------------------------------------" nl
    "-- Instruction interpreter" nl
    "--------------------------------------------------------------------" nl
@@ -278,8 +291,9 @@
    "-1 downto 0);" nl
    "   variable op : std_logic_vector(" (->vhdl-name OPERATION-WIDTH)
    "-1 downto 0);" nl
-   (define-functions)
+   (define-functions) nl
    "begin" nl
+   "      oLEDG <= (others => '0');" nl
    "      -- default assignments" nl
    "      registers_next <= registers_reg;" nl
    "      pc_next <= pc_reg;" nl
@@ -289,21 +303,26 @@
    "op := instruction(" (->vhdl-name OPERATION-WIDTH) "-1 downto 0);" nl
    "-- Interpret operations" nl
    "case op is" nl
-   ;;(interpret-ops instructions)
-   
+   (apply ~a (hash-map instructions
+                       (lambda (index value)
+                         (~a "when " (->vhdl-name index) " => " nl
+                             "oLEDG(" value ") <= '1';" nl
+                             (eval (symbol-append index '- 'vhdl)) nl))))
+   "when others => null;" nl
+   "end case;" nl
    "end process;" nl
-   
+   "-- connect first register to the LEDs" nl
+   "oLEDR <= registers_reg(0)(17 downto 0);" nl
    "end architecture arch;" nl
    ))
 
-(printf (generate-main-file '((iCLK in)
-                              (test inout))))
+(display-to-file (generate-main-file '((iCLK_50 in)
+                                       (iKEY in 3 0)
+                                       (oLEDR out 17 0)
+                                       (oLEDG out 7 0)))
+                 "main.vhd" #:exists 'replace)
 
 (display-to-file (generate-library-file mc) "test.vhd" #:exists 'replace)
-
-
-
-
 
 
 
