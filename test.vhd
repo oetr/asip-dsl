@@ -15,13 +15,13 @@ constant INSTRUCTION_WIDTH : integer := 48;
   --------------------------------------------------------------------
   -- Opcodes
   --------------------------------------------------------------------
-constant asip_jump_if_true : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0011";
-constant asip_wait : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0001";
-constant asip_eq_rv : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0101";
 constant asip_jump : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0010";
-constant asip_set_rv : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0000";
-constant asip_halt : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0110";
+constant asip_wait : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0001";
+constant asip_jump_if_true : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0011";
 constant asip_add_rvr : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0100";
+constant asip_halt : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0110";
+constant asip_eq_rv : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0101";
+constant asip_set_rv : std_logic_vector(OPERATION_WIDTH-1 downto 0) := "0000";
   --------------------------------------------------------------------
   -- Registers
   --------------------------------------------------------------------

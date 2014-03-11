@@ -222,8 +222,8 @@
     end function get_u;")
 
 
-(define (interpret-ops instructions)
-  )
+;; (define (interpret-ops instructions)
+;;   )
 
 (define (symbol-append . symbols)
   (string->symbol
@@ -332,7 +332,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Showing Shima that code is data
-;;; TODO: Maybe better to not use macros and use lambdas instead
+;;; TODO: Maybe better to not use macros and use lambdas instead?
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (test num)
   (printf "~a~n" 'num))

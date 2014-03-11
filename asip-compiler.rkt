@@ -1,3 +1,4 @@
+(require racket/format)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Number->instruction convertion
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -221,7 +222,6 @@
                                   (string-append
                                    (let ,(map list names ranges)
                                      (define nl "\n") ;; to not do it many times
-                                     
                                      body-v ...)
                                    ,(if  manipulates-pc?
                                          "" '(increment-pc)))))
@@ -383,6 +383,14 @@
 (define (i->s val width)
   (u->s (i->u val width)))
 
+;; convert to string
+(define (s+ . args)
+  (cond [(empty? args) ""]
+        [(string? (car args))
+         (string-append (car args)
+                        (apply s+ (cdr args)))]
+        [else (apply s+ (cdr args))]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -484,7 +492,7 @@
    (asip-set-rv-mc 0 0)
    (asip-wait-mc 50000000)
    (asip-add-rvr-mc 0 1 0)
-   (asip-eq-rvr-mc 0 10)
+   (asip-eq-rv-mc 0 10)
    (asip-jump-if-true-mc 6)
    (asip-jump-mc 1)
    (asip-halt-mc)))
@@ -514,7 +522,7 @@
               (asip-set-rv-simulation 0 0)
               (asip-wait-simulation 1)
               (asip-add-rvr-simulation 0 1 0)
-              (asip-eq-rvr-simulation 0 10)
+              (asip-eq-rv-simulation 0 10)
               (asip-jump-if-true-simulation 6)
               (asip-jump-simulation 1)
               (asip-halt-simulation)))
@@ -528,12 +536,12 @@
   (pretty-print user-registers))
 
 (define (simulator-run sim steps (debug #f))
-  ;; (when debug
-  ;;   (printf "~n----- Simulation Start -------~n")
-  ;;   (show-environment))
+   (when debug
+     (printf "~n----- Simulation Start -------~n")
+     (show-environment))
   (for ([step steps])
     (simulator-step sim1)
     (when debug
       (show-environment))))
 
-(simulator-run sim1 1 #t)
+(simulator-run sim1 10 #t)

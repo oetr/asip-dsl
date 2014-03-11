@@ -1,5 +1,5 @@
 library ieee;
-use ieee.std_logic_1164.all;
+usre ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.instructions_lib.all;
 ----------------------------------------------------------------------
@@ -64,27 +64,27 @@ begin
     variable wait_cycles : std_logic_vector(INSTR_WIDTH - INSTR_NAME_WIDTH - 1
                                             downto 0);
     function get_i (
-      constant hi : integer;
+      constant hi  : integer;
       constant low : integer)
       return integer is
     begin
-        return to_integer(unsigned(instruction(hi downto low)));
+      return to_integer(unsigned(instruction(hi downto low)));
     end function get_i;
 
     function get_s (
-      constant hi : integer;
+      constant hi  : integer;
       constant low : integer)
       return std_logic_vector is
     begin
-        return instruction(hi downto low);
+      return instruction(hi downto low);
     end function get_s;
 
     function get_u (
-      constant hi : integer;
+      constant hi  : integer;
       constant low : integer)
       return unsigned is
     begin
-        return unsigned(instruction(hi downto low));
+      return unsigned(instruction(hi downto low));
     end function get_u;
     
   begin
@@ -150,7 +150,7 @@ begin
 
 
       ----------------------------------------------------------------
-      when "1100" =>                   -- jump if true
+      when "1100" =>                    -- jump if true
         if if_reg(0) = '1' then
           i_next <= to_integer(unsigned(wait_cycles));
         else
@@ -172,6 +172,21 @@ begin
       ----------------------------------------------------------------
       when others => null;
     end case;
+  end process;
+
+  --------------------------------------------------------------------
+  -- Priority encoder
+  --------------------------------------------------------------------
+  process (result, ans_reg) is
+    variable answer : integer;
+  begin
+    ans_next <= 0;
+    answer := 0;
+    for i in 0 to 399 loop
+      if result(i) = '1' then
+        answer := i+1;
+      end if;
+    end loop;
   end process;
 
 
