@@ -6,26 +6,28 @@
 ;; the length of the resulting string is equal to "bits"
 (define (n->binary a-number bits)
   (let ([binary-number (number->string a-number 2)])
-    (string-append (make-string (- bits (string-length binary-number)) #\0)
+    (string-append (make-string
+                    (- bits (string-length binary-number)) #\0)
                    binary-number)))
 
 ;; To convert a set of numbers into a string of binary digits
 ;; the length of the resulting string is equal to "instruction-length"
 ;; if the total bit length of the provided args does not exceed
 ;; "instruction-length", the difference will be replaced with zeroes: "0"
-;; Example: (n->binary* 10 3 2 0 2) -> "0000000011"
-;; Example: (n->binary* 10 3 2 0 2 10 4) -> "0010100011"
+;; Example: (n->binary* 10 3 2 0 2) -> "0000001100"
+;; Example: (n->binary* 10 3 2 0 2 10 4) -> "0011001010"
 ;; Example: (n->binary* 10 3 2 0 2 10 4 0 3) -> error
 (define (n->binary* instruction-length . args)
   (when (not (zero? (modulo (length args) 2)))
     (error 'n->binary* "Number of arguments should be divisible by 2. ~a\n" args))
   ;; count the total bit length of the provided arguments
   ;; need to check every odd number in "args"
-  (define all-length (let loop ([args args][num #f])
-                       ;; xor toggles "num"
-                       (cond [(empty? args) 0]
-                             [num (+ (car args) (loop (cdr args) (xor num #t)))]
-                             [else (loop (cdr args) (xor num #t))])))
+  (define all-length
+    (let loop ([args args] [num #f])
+      ;; xor toggles "num"
+      (cond [(empty? args) 0]
+            [num (+ (car args) (loop (cdr args) (not num)))]
+            [else (loop (cdr args) (not num))])))
   ;; total bit length larger than provided "instruction-length"
   (when (> all-length instruction-length)
     (error 'n->binary* "Exceeding instruction length ~a by ~a~n"
@@ -39,12 +41,13 @@
                  (list "")
                  (cons (n->binary (car args) (cadr args))
                        (loop (cddr args)))))))
-  ;; append zeroes from the left to match the provided "instruction length"
+  ;; append zeroes from the left to match the
+  ;; provided "instruction length"
   (define len (string-length result))
   (if (< len instruction-length)
-      (string-append (build-string (- instruction-length len)
-                                   (lambda (not-used) #\0))
-                     result)
+      (string-append (build-string
+                      (- instruction-length len)
+                      (lambda (not-used) #\0)) result)
       result))
 
 
@@ -106,7 +109,8 @@
 (define REGISTER-WIDTH    32)
 (define REGISTER-N-WIDTH  4)     ;; there are 2^4 registers
 (define LINE-N-WIDTH      10)    ;; 1024 lines in code!
-(define INSTRUCTION-WIDTH (+ OPERATION-WIDTH (* 3 REGISTER-N-WIDTH) REGISTER-WIDTH))
+(define INSTRUCTION-WIDTH
+  (+ OPERATION-WIDTH (* 3 REGISTER-N-WIDTH) REGISTER-WIDTH))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -125,7 +129,7 @@
     (error 'lookup-width "Width of ~a is unknown.~n" definition))
   result)
 
-;; the naming conventions are r0---r15, val, line, cycles
+;; the naming conventions are reg0---reg15, val, line, cycles
 ;; strips the name of
 (define (normalize-name a-symbol)
   (cond
@@ -135,28 +139,33 @@
    ;; try to see whether the string is a register
    [else
     (define a-string (symbol->string a-symbol))
-    (define string-root (regexp-match #px"[[:alpha:]]+" a-string))
+    (define string-root (regexp-match #px"[[:alpha:]]+"
+                                      a-string))
     (when string-root
       (match (car string-root)
         ["reg" 'reg]
-        [else (error
-               'normalize-name
-               "Name ~a does not follow the naming conventions~n" a-symbol)]))]))
+        [else
+         (error
+          'normalize-name
+          "Name ~a does not follow the naming conventions~n"
+          a-symbol)]))]))
 
 ;; finds whether some of the elements in the list lof-elements
 ;; is in the a-list
 (define (find lof-elements . a-list)
-  ;;(printf "~a, car: ~a, cdr: ~a~n" a-list (car a-list) (cdr a-list))
   (cond [(empty? a-list) #f]
         [(ormap (lambda (element)
                   (equal? element (car a-list)))
                 lof-elements) #t]
-        [(list? (car a-list)) (or (apply find (cons lof-elements (car a-list)))
-                                  (apply find (cons lof-elements (cdr a-list))))]
+        [(list? (car a-list))
+         (or (apply find (cons lof-elements (car a-list)))
+             (apply find (cons lof-elements (cdr a-list))))]
         [else (apply find (cons lof-elements (cdr a-list)))]))
 
-;; given a list of numbers, return a list of consed pairs for each number
-;; the returned numbers specify the start and the end of each number
+;; given a list of numbers, return a list of consed pairs
+;; for each number
+;; the returned numbers specify the start and the end
+;; of each number
 ;; Example: (compute-range 1 2 3)
 ;; -> '((0 . 0) (1 . 2) (3 . 5))
 (define (compute-range . args)
@@ -186,19 +195,23 @@
          (set! closure-id id)
          (add-instruction! 'name id))
        ;; generate appropriate names
-       (define arguments-and-width (for/list ([n (in-list 'args)])
-                                     (list n (lookup-width (normalize-name n)))))
-       (printf "test: ~a~n" arguments-and-width)
+       (define arguments-and-width
+         (for/list ([n (in-list 'args)])
+           (list n (lookup-width (normalize-name n)))))
+       (printf "arguments and width: ~a~n" arguments-and-width)
        (define arguments (map car arguments-and-width))
        (define all-widths (append (reverse arguments-and-width)
-                                  (list (list closure-id OPERATION-WIDTH))))
-       (define widths (append (flatten (reverse arguments-and-width))
+                                  (list (list closure-id
+                                              OPERATION-WIDTH))))
+       (define widths (append (flatten (reverse
+                                        arguments-and-width))
                               (list closure-id OPERATION-WIDTH)))
        ;; prepare the name strings
        (define name-string (symbol->string 'name))
        ;;(printf "name-string: ~a~n" name-string)
        (define simulation-name
-         (string->symbol (string-append name-string "-simulation")))
+         (string->symbol (string-append name-string
+                                        "-simulation")))
        (define machine-code-name
          (string->symbol (string-append name-string "-mc")))
        (define vhdl-name
@@ -210,25 +223,30 @@
        ;; procedure to run the code in simulation
        ;; analyze the procedure's body to see if the
        ;; program counter gets incremented somewhere
-       (define manipulates-pc? (find '(pc-set! pc-increase!) 'body-r ...))
-       (define definition-racket `(define (,simulation-name . ,arguments)
-                                    body-r ...))
-        (unless manipulates-pc?
-          (set! definition-racket (append definition-racket `((,pc-increase!)))))
+       (define manipulates-pc? (find '(pc-set! pc-increase!)
+                                     'body-r ...))
+       (define definition-racket
+         `(define (,simulation-name . ,arguments) body-r ...))
+       (unless manipulates-pc?
+         (set! definition-racket (append definition-racket
+                                         `((,pc-increase!)))))
        ;; translate racket->vhdl
-       (define ranges (flatten (apply compute-range (reverse (map cadr all-widths)))))
-       (define names (flatten (apply make-names (cons 'op 'args))))
+       (define ranges (flatten
+                       (apply compute-range
+                              (reverse (map cadr all-widths)))))
+       (define names (flatten
+                      (apply make-names (cons 'op 'args))))
        (define definition-vhdl `(define ,vhdl-name
                                   (string-append
                                    (let ,(map list names ranges)
-                                     (define nl "\n") ;; to not do it many times
+                                     ;; to not do it many times
+                                     (define nl "\n")
                                      body-v ...)
                                    ,(if  manipulates-pc?
                                          "" '(increment-pc)))))
        (pretty-print definition-vhdl)
        (eval definition-vhdl)
-       (eval definition-racket)
-       )]))
+       (eval definition-racket))]))
 
 ;; -----------------------------------------------------------
 ;; Simulation environment
@@ -246,11 +264,6 @@
 
 (define (r$ reg)
   (vector-ref registers reg))
-
-(define (test-procedure)
-  (define registers (vector 1 2 3))
-  (r! 0 10))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; User-defined registers
@@ -294,9 +307,11 @@
 (define (type-range2 a-type) (vector-ref a-type 2))
 (define (type-dir a-type)    (vector-ref a-type 3))
 
-(define (define-user-register name type (range1 #f) (range2 #f) (dir 'downto))
+(define (define-user-register name type (range1 #f)
+          (range2 #f) (dir 'downto))
   (hash-set! user-registers name
-             (make-register (define-type type range1 range2 dir) 0)))
+             (make-register (define-type type range1 range2 dir)
+                            0)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Program counter
@@ -462,7 +477,8 @@
    (~a
     (set-register (get-i reg1-hi reg1-low)
                   (i->s (~a (get-i val-hi val-low) " + "
-                            (s->i (get-register (get-i reg1-hi reg1-low))))
+                            (s->i (get-register
+                                   (get-i reg1-hi reg1-low))))
                         val)) nl)))
 
 (define-instruction (asip-eq-rv reg val)
@@ -536,9 +552,9 @@
   (pretty-print user-registers))
 
 (define (simulator-run sim steps (debug #f))
-   (when debug
-     (printf "~n----- Simulation Start -------~n")
-     (show-environment))
+  (when debug
+    (printf "~n----- Simulation Start -------~n")
+    (show-environment))
   (for ([step steps])
     (simulator-step sim1)
     (when debug
