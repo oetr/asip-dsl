@@ -395,7 +395,7 @@
 ;;; Operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; define user registers
-(define-user-register 'counter 'integer);; 0 (sub1 (expt 2 REGISTER-WIDTH)) 'to)
+(define-user-register 'counter 'integer) ;; 0 (sub1 (expt 2 REGISTER-WIDTH)) 'to)
 (define-user-register 'started 'std_logic)
 (define-user-register 'if 'std_logic)
 
