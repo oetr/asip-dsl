@@ -1,5 +1,7 @@
 An experiment with ASIPs to see if it's easier to solve a problem and make it run on FPGAs.
 This app allows you to make your own custom instructions that do some work on registers, wires, and values.
+
+* Defining instructions
 You can define either raw VHDL-style instruction, a raw simulation instruction that looks mostly like Racket code, or both.
 Here is an example of both:
 
@@ -18,6 +20,7 @@ Here is an example of both:
          "end if;" nl)))
 #+END_SRC
 
+* Making machine code
 The custom instructions can be to write code with them, as if you are writing assembly language.
 You should give your instructions nice names, not like me:
 #+BEGIN_SRC scheme
@@ -32,6 +35,7 @@ You should give your instructions nice names, not like me:
    (asip-halt-mc)))
 #+END_SRC
 
+* Simulating machine code
 In addition, the ASIP code can be simulated:
 
 #+BEGIN_SRC scheme
@@ -71,3 +75,6 @@ In addition, the ASIP code can be simulated:
   ;;       (counter . #(#(integer #f #f downto) 1))
   ;;       (if . #(#(std_logic #f #f downto) 0)))
 #+END_SRC
+
+* Convert code into VHDL-based ASIP
+Coming soon...
