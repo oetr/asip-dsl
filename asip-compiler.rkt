@@ -462,4 +462,4 @@
     (when debug
       (show-environment))))
 
-(simulator-run sim1 10 #t)
+(simulator-run sim1 3 #t)

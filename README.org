@@ -1,0 +1,73 @@
+An experiment with ASIPs to see if it's easier to solve a problem and make it run on FPGAs.
+This app allows you to make your own custom instructions that do some work on registers, wires, and values.
+You can define either raw VHDL-style instruction, a raw simulation instruction that looks mostly like Racket code, or both.
+Here is an example of both:
+
+#+BEGIN_SRC scheme
+  (define-instruction (asip-eq-rv reg val)
+    (racket
+     (if (= (r$ reg) val)
+         (user-register-set! if 1)
+         (user-register-set! if 0)))
+    (vhdl
+     (~a "if " (get-register (get-i reg-hi reg-low)) " = "
+         (get-s val-hi val-low) " then" nl
+         (set-user-register 'if "'1'") nl
+         "else" nl
+         (set-user-register 'if "'0'") nl
+         "end if;" nl)))
+#+END_SRC
+
+The custom instructions can be to write code with them, as if you are writing assembly language.
+You should give your instructions nice names, not like me:
+#+BEGIN_SRC scheme
+(define machine-code-simple-counter
+  (list
+   (asip-set-rv-mc 0 0)
+   (asip-wait-mc 50000000)
+   (asip-add-rvr-mc 0 1 0)
+   (asip-eq-rv-mc 0 10)
+   (asip-jump-if-true-mc 6)
+   (asip-jump-mc 1)
+   (asip-halt-mc)))
+#+END_SRC
+
+In addition, the ASIP code can be simulated:
+
+#+BEGIN_SRC scheme
+  (define sim1 (make-simulator
+                (asip-set-rv-simulation 0 0)
+                (asip-wait-simulation 1)
+                (asip-add-rvr-simulation 0 1 0)
+                (asip-eq-rv-simulation 0 10)
+                (asip-jump-if-true-simulation 6)
+                (asip-jump-simulation 1)
+                (asip-halt-simulation)))
+
+  (simulator-run sim1 3 #t)
+
+  ;; ----- Simulation Start -------
+  ;; PC:        0
+  ;; regs:      #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+  ;; user-regs: #hash((started . #(#(std_logic #f #f downto) 0))
+  ;;       (counter . #(#(integer #f #f downto) 0))
+  ;;       (if . #(#(std_logic #f #f downto) 0)))
+  ;; (asip-set-rv-simulation 0 0)
+  ;; PC:        1
+  ;; regs:      #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+  ;; user-regs: #hash((started . #(#(std_logic #f #f downto) 0))
+  ;;       (counter . #(#(integer #f #f downto) 0))
+  ;;       (if . #(#(std_logic #f #f downto) 0)))
+  ;; (asip-wait-simulation 1)
+  ;; PC:        1
+  ;; regs:      #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+  ;; user-regs: #hash((started . #(#(std_logic #f #f downto) 1))
+  ;;       (counter . #(#(integer #f #f downto) 1))
+  ;;       (if . #(#(std_logic #f #f downto) 0)))
+  ;; (asip-wait-simulation 1)
+  ;; PC:        2
+  ;; regs:      #(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+  ;; user-regs: #hash((started . #(#(std_logic #f #f downto) 1))
+  ;;       (counter . #(#(integer #f #f downto) 1))
+  ;;       (if . #(#(std_logic #f #f downto) 0)))
+#+END_SRC
