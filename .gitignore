@@ -1,5 +1,3 @@
 *
-!*.vhd
-!*.vhdl
 !.gitignore
 !*.rkt

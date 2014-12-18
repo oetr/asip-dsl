@@ -302,7 +302,7 @@
    (apply ~a (hash-map instructions
                        (lambda (index value)
                          (~a "when " (->vhdl-name index) " => " nl
-                             "oLEDG(" value ") <= '1';" nl
+                             ;;"oLEDG(" value ") <= '1';" nl
                              (eval (symbol-append index '- 'vhdl)) nl))))
    "when others => null;" nl
    "end case;" nl
