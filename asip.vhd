@@ -1,5 +1,5 @@
 library ieee;
-usre ieee.std_logic_1164.all;
+use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.instructions_lib.all;
 ----------------------------------------------------------------------

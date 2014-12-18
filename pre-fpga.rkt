@@ -67,5 +67,66 @@
 
 (process
  (reg-set a 20)
- (reg-set a 30)
+ (reg-set a 30))
+
+
+;; Go higher than that!
+;; high-high-high-level programming in hardware
+;; Sci-Fi level of programming
+;; Programming of the future:
+;; stick together large pieces of HW
+;; the pieces configure themselves
+
+;; concrete: go away from registers, low-level control
+;; get things done
+;; propagate information
+;; ask for signal width later
+;; get the problem solved
+;; Case study: blob detection of an image (CCL)
+;; pixel by pixel
+;; keep track of current (x;y) coordinates
+;; check neighbors
+;; update connected components
+(set pixel-status #t)
+
+;; @rising edge?
+
+(posedge
+ (clk)
+ (if reset
+     (begin
+       (1)
+       (2)
+       (3))
+     (begin
+       (1)
+       (2))))
+
+
+(posedge (clk) (list sig1 sig2 sig3))
+
+(set sig1 10)
+(set (sig1 (+ sig2 3))
+     (sig2 (+ 20 i))
+     (sig8 (and (xor ) or ...)))
+
+
+;; Save all pixels in a row buffer
+(cond
+ [(= y 0)
+  (set (A B C) 0)]
+ [(= x 0)
+  (set ((A B) 0)
+       (C row-buffer))]
+ [(= x 1)
+  (set ())]
+  
+(set C row-buffer)
+(set B C)
+(set A B)
+
+(set A )
+
+
+
 

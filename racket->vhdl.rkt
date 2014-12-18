@@ -94,7 +94,7 @@
    "library ieee;" nl
    "use ieee.std_logic_1164.all;" nl
    "use ieee.numeric_std.all;" nl
-   "----------------------------------------------------------------------" nl
+   "------------------------------------------------------------" nl
    "package test is" nl
    "  --------------------------------------------------------------------" nl
    "  -- Constants"nl
@@ -221,10 +221,6 @@
         return unsigned(instruction(hi downto low));
     end function get_u;")
 
-
-;; (define (interpret-ops instructions)
-;;   )
-
 (define (symbol-append . symbols)
   (string->symbol
    (apply string-append (map symbol->string symbols))))
@@ -240,16 +236,16 @@
    "use ieee.std_logic_1164.all;" nl
    "use ieee.numeric_std.all;" nl
    "use work.test.all;" nl
-   "----------------------------------------------------------------------" nl
+   "------------------------------------------" nl
    "entity main is" nl
    "port (" nl
    (define-ios i/o) ");" nl
    "end entity main;" nl
-   "----------------------------------------------------------------------" nl
+   "------------------------------------------" nl
    "architecture arch of main is" nl
-   "  --------------------------------------------------------------------" nl
+   "  ----------------------------------------" nl
    "  -- Signals"nl
-   "  --------------------------------------------------------------------" nl
+   "  ----------------------------------------" nl
    "  signal reset, clk     : std_logic;" nl
    "  signal registers_reg  : regs_type;" nl
    "  signal registers_next : regs_type;" nl
@@ -265,9 +261,9 @@
    "begin" nl
    "  reset <= not iKEY(0);" nl
    "  clk   <= iCLK_50;" nl
-   "  --------------------------------------------------------------------" nl
+   "  ----------------------------------------" nl
    "  -- Rising edge process"nl
-   "  --------------------------------------------------------------------" nl
+   "  ----------------------------------------" nl
    "  process (clk, reset) is" nl
    "  begin" nl
    "    if reset = '1' then" nl
@@ -281,9 +277,9 @@
    (registers-assign-rising-edge user-registers)
    "    end if;" nl
    "  end process;" nl
-   "--------------------------------------------------------------------" nl
-   "-- Instruction interpreter" nl
-   "--------------------------------------------------------------------" nl
+   " ----------------------------------------" nl
+   " -- Instruction interpreter" nl
+   " ----------------------------------------" nl
    "process (registers_reg, pc_reg"
    (add-user-registers-to-comb-process user-registers)
    ") is" nl
@@ -320,9 +316,10 @@
                                        (iKEY in 3 0)
                                        (oLEDR out 17 0)
                                        (oLEDG out 7 0)))
-                 "main.vhd" #:exists 'replace)
+                 "main-1.vhd" #:exists 'replace)
 
 (display-to-file (generate-library-file mc) "test.vhd" #:exists 'replace)
+
 
 
 
