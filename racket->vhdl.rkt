@@ -322,11 +322,6 @@
 
 
 
-
-
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Showing Shima that code is data
 ;;; TODO: Maybe better to not use macros and use lambdas instead?
