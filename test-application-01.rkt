@@ -1,3 +1,9 @@
+(require racket/format)
+(require "utilities.rkt")
+(require "asip-compiler.rkt")
+(require "racket-vhdl.rkt")
+(require "vhdl-abstractions.rkt")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -125,8 +131,14 @@
 (display-to-file (generate-main-file '((iCLK_50 in)
                                        (iKEY in 3 0)
                                        (oLEDR out 17 0)
-                                       (oLEDG out 7 0)))
+                                       (oLEDG out 7 0))
+                                     user-registers
+                                     instructions
+                                     asip-constants)
                  "main.vhd" #:exists 'replace)
 
-(display-to-file (generate-library-file mc) "test.vhd" #:exists 'replace)
+(display-to-file (generate-library-file mc
+                                        instructions
+                                        asip-constants)
+                 "test.vhd" #:exists 'replace)
 

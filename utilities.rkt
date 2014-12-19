@@ -106,4 +106,20 @@
             "Name ~a does not follow the naming conventions~n"
             a-symbol)]))]))
 
+
+  (define (make-register type val)
+    (vector type val))
+  (define (register-type a-reg) (vector-ref a-reg 0))
+  (define (register-val a-reg) (vector-ref a-reg 1))
+  (define (register-val-set! a-reg val) (vector-set! a-reg 1 val))
+
+
+  (define (define-type name (range1 #f) (range2 #f) (dir 'downto))
+    (vector name range1 range2 dir))
+
+  (define (type-name a-type)   (vector-ref a-type 0))
+  (define (type-range1 a-type) (vector-ref a-type 1))
+  (define (type-range2 a-type) (vector-ref a-type 2))
+  (define (type-dir a-type)    (vector-ref a-type 3))
+
   )
