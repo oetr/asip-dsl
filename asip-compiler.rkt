@@ -1,6 +1,7 @@
 (require racket/format)
 
 (require "utilities.rkt")
+(require "vhdl-abstractions.rkt")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Instructions have unique IDs
 ;;; Instruction symbols and their IDs are saved in a hash map
@@ -264,10 +265,10 @@
   (~a "get_s(" high", " low")"))
 
 (define (set-register reg new-value)
-  (~a "registers_next(" reg ") <= " new-value ";"))
+  (~a "registers_reg(" reg ") <= " new-value ";"))
 
 (define (set-user-register name new-value)
-  (~a name "_next <= " new-value ";"))
+  (~a name "_reg <= " new-value ";"))
 
 (define (get-user-register name)
   (~a name "_reg"))
@@ -276,10 +277,10 @@
   (~a "registers_reg(" reg ")"))
 
 (define (increment-pc)
-  "pc_next <= pc_reg + 1;\n")
+  "pc_reg <= pc_reg + 1;\n")
 
 (define (set-pc val)
-  (~a "pc_next <= " val ";\n"))
+  (~a "pc_reg <= " val ";\n"))
 
 (define (get-pc)
   "pc_reg")
@@ -310,110 +311,6 @@
                         (apply s+ (cdr args)))]
         [else (apply s+ (cdr args))]))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Operations
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; define user registers
-(define-user-register 'counter 'integer) ;; 0 (sub1 (expt 2 REGISTER-WIDTH)) 'to)
-(define-user-register 'started 'std_logic)
-(define-user-register 'if 'std_logic)
-
-;; define user operations
-(define-instruction (asip-set-rv reg val)
-  (racket
-   (r! reg val))
-  (vhdl
-   (~a (set-register (get-i reg-hi reg-low) (get-s val-hi val-low)) nl)))
-
-(define-instruction (asip-wait cycles)
-  (racket
-   (when (= (user-register-ref started) 1)
-     (define c (user-register-ref counter))
-     (if (or (= c 1) (= c 0))
-         (begin
-           (pc-increase!)
-           (user-register-set! counter 0)
-           (user-register-set! started 0))
-         (user-register-set! counter (- c 1))))
-   (when (= (user-register-ref started) 0)
-     (user-register-set! started 1)
-     (user-register-set! counter cycles)))
-  (vhdl
-   (~a
-    "-- allow to wait for one clock cycle" nl
-    "if " (get-i cycles-hi cycles-low) " = 1 then" nl
-    (increment-pc)
-    "elsif started_reg = '0' then" nl
-    "counter_next <= "(get-i cycles-hi cycles-low) ";" nl
-    "started_next      <= '1';" nl
-    "else                            -- count down" nl
-    "counter_next <= counter_reg - 1;" nl
-    "if counter_reg = 0 then" nl
-    "started_next <= '0';" nl
-    (increment-pc)
-    "end if;" nl
-    "end if;" nl)))
-
-
-(define-instruction (asip-jump line)
-  (racket (pc-set! line))
-  (vhdl (~a (set-pc (get-i line-hi line-low)))))
-
-
-(define-instruction (asip-jump-if-true line)
-  (racket
-   (if (zero? (user-register-ref if))
-       (pc-increase!)
-       (pc-set! line)))
-  (vhdl
-   (~a
-    "if " (get-user-register 'if) "= '0' then" nl
-    (increment-pc)
-    "else" nl
-    (set-pc (get-i line-hi line-low))
-    "end if;" nl)))
-
-(define-instruction (asip-add-rvr reg val reg1)
-  (racket
-   (r! reg1 (+ (r$ reg) val)))
-  (vhdl
-   (~a
-    (set-register (get-i reg1-hi reg1-low)
-                  (i->s (~a (get-i val-hi val-low) " + "
-                            (s->i (get-register
-                                   (get-i reg1-hi reg1-low))))
-                        val)) nl)))
-
-(define-instruction (asip-eq-rv reg val)
-  (racket
-   (if (= (r$ reg) val)
-       (user-register-set! if 1)
-       (user-register-set! if 0)))
-  (vhdl
-   (~a "if " (get-register (get-i reg-hi reg-low)) " = "
-       (get-s val-hi val-low) " then" nl
-       (set-user-register 'if "'1'") nl
-       "else" nl
-       (set-user-register 'if "'0'") nl
-       "end if;" nl)))
-
-(define-instruction (asip-halt)
-  (racket (pc-set! (pc-ref)))
-  (vhdl (set-pc (get-pc))))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Code
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define mc
-  (list
-   (asip-set-rv-mc 0 0)
-   (asip-wait-mc 50000000)
-   (asip-add-rvr-mc 0 1 0)
-   (asip-eq-rv-mc 0 10)
-   (asip-jump-if-true-mc 6)
-   (asip-jump-mc 1)
-   (asip-halt-mc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Simulator
@@ -436,15 +333,6 @@
            (printf "~a~n" (vector-ref instr pc))
            (eval (vector-ref instr pc))])))]))
 
-(define sim1 (make-simulator
-              (asip-set-rv-simulation 0 0)
-              (asip-wait-simulation 1)
-              (asip-add-rvr-simulation 0 1 0)
-              (asip-eq-rv-simulation 0 10)
-              (asip-jump-if-true-simulation 6)
-              (asip-jump-simulation 1)
-              (asip-halt-simulation)))
-
 (define (simulator-step a-sim) (a-sim 'step))
 
 (define (show-environment)
@@ -461,5 +349,3 @@
     (simulator-step sim1)
     (when debug
       (show-environment))))
-
-(simulator-run sim1 3 #t)

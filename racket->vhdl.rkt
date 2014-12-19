@@ -155,11 +155,8 @@
   (~a "signal " name " : " (convert-type type range1 dir range2) ";\n"))
 
 (define (convert-register name type (range1 #f) (range2 #f) (dir 'downto))
-  (apply string-append
-         (map (lambda (reg-or-next)
-                (convert-signal (string-append (~a (symbol->string name) reg-or-next))
-                                type range1 range2 dir))
-              (list "_reg" "_next"))))
+  (convert-signal (string-append (~a (symbol->string name) "_reg"))
+                  type range1 range2 dir))
 
 ;; registers is a hash map
 (define (registers-rising-edge-default registers)
@@ -176,15 +173,10 @@
 
 
 (define (registers-assign-rising-edge registers (dir 'reg->next))
-  (define from "_next")
-  (define to "_reg")
-  (when (symbol=? dir 'next->reg)
-    (set! from "_reg")
-    (set! to "_next"))
   (apply string-append
          (hash-map registers
                    (lambda (index value)
-                     (~a index to " <= " index from ";\n")))))
+                     (~a index "_reg" " <= " index "_reg" ";\n")))))
 
 (define (add-user-registers-to-comb-process user-registers)
   (define result 
@@ -247,8 +239,7 @@
    "  -- Signals"nl
    "  ----------------------------------------" nl
    "  signal reset, clk     : std_logic;" nl
-   "  signal registers_reg  : regs_type;" nl
-   "  signal registers_next : regs_type;" nl
+   "  signal registers_reg  : regs_type := (others => (others => '0'));" nl
    (convert-register 'pc 'integer 0 (sub1 (expt 2 LINE-N-WIDTH)) 'to)
    (apply string-append (hash-map user-registers
                                   (lambda (name data)
@@ -262,38 +253,17 @@
    "  reset <= not iKEY(0);" nl
    "  clk   <= iCLK_50;" nl
    "  ----------------------------------------" nl
-   "  -- Rising edge process"nl
+   "  -- Interpret instructions" nl
    "  ----------------------------------------" nl
-   "  process (clk, reset) is" nl
-   "  begin" nl
-   "    if reset = '1' then" nl
-   "      registers_reg    <= (others => (others => '0'));" nl
-   "      pc_reg    <= 0;" nl
-   "      -- user registers" nl
-   (registers-rising-edge-default user-registers)
-   "      elsif rising_edge(clk) then" nl
-   "      registers_reg    <= registers_next;" nl
-   "      pc_reg    <= pc_next;" nl
-   (registers-assign-rising-edge user-registers)
-   "    end if;" nl
-   "  end process;" nl
-   " ----------------------------------------" nl
-   " -- Instruction interpreter" nl
-   " ----------------------------------------" nl
-   "process (registers_reg, pc_reg"
-   (add-user-registers-to-comb-process user-registers)
-   ") is" nl
+   "  process (clk) is" nl
    "variable instruction      : std_logic_vector(" (->vhdl-name INSTRUCTION-WIDTH)
    "-1 downto 0);" nl
    "   variable op : std_logic_vector(" (->vhdl-name OPERATION-WIDTH)
    "-1 downto 0);" nl
    (define-functions) nl
-   "begin" nl
-   "      oLEDG <= (others => '0');" nl
-   "      -- default assignments" nl
-   "      registers_next <= registers_reg;" nl
-   "      pc_next <= pc_reg;" nl
-   (registers-assign-rising-edge user-registers 'next->reg)
+   "  begin" nl
+   ;;(registers-rising-edge-default user-registers)
+   "    if rising_edge(clk) then" nl
    "-- Decode the operations" nl
    "instruction := instructions(pc_reg);" nl
    "op := instruction(" (->vhdl-name OPERATION-WIDTH) "-1 downto 0);" nl
@@ -302,61 +272,12 @@
    (apply ~a (hash-map instructions
                        (lambda (index value)
                          (~a "when " (->vhdl-name index) " => " nl
-                             ;;"oLEDG(" value ") <= '1';" nl
                              (eval (symbol-append index '- 'vhdl)) nl))))
    "when others => null;" nl
    "end case;" nl
-   "end process;" nl
-   "-- connect first register to the LEDs" nl
-   "oLEDR <= registers_reg(0)(17 downto 0);" nl
-   "end architecture arch;" nl
+   ;;(registers-assign-rising-edge user-registers)
+   "    end if;" nl
+   "  end process;" nl
+      "end architecture arch;" nl
    ))
 
-(display-to-file (generate-main-file '((iCLK_50 in)
-                                       (iKEY in 3 0)
-                                       (oLEDR out 17 0)
-                                       (oLEDG out 7 0)))
-                 "main-1.vhd" #:exists 'replace)
-
-(display-to-file (generate-library-file mc) "test.vhd" #:exists 'replace)
-
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Showing Shima that code is data
-;;; TODO: Maybe better to not use macros and use lambdas instead?
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (test num)
-  (printf "~a~n" 'num))
-
-(define-syntax test-m
-  (syntax-rules ()
-    [(_ num)
-     (printf "~a~n" (string-append (symbol->string 'num)
-                                   "-test"))]))
-
-(define (my-fun arg1 arg2)
-  (+ arg1 arg2))
-
-(define-syntax define-proc+description
-  (syntax-rules ()
-    [(_ (name . args) body ...)
-     (begin
-       (define (name . args)
-         body
-         ...)
-       (define description-name (string->symbol
-                                 (string-append (symbol->string 'name)
-                                                "-description")))
-       (eval `(define ,description-name '(args body ...))))]))
-
-(define-proc+description (t1 n n1 n2)
-  (+ (* n 10) n1 n2)
-  (+ (* n 10) n1 n2)
-  )
-
-(define-syntax define-from-description
-  (syntax-rules ()
-    [(_ description)
-     (eval `(lambda ,(car description)
-              ,(car (cdr description))))]))
