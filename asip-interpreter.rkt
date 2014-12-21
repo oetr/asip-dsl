@@ -42,33 +42,26 @@
                 (oLEDG out 7 0)))
 
  ;; registers, wires
- (def-reg a (from 10) (downto 0) (val 10))
+ (def a (range 10 0) (val 10))
+ (def b (range 10 0) (val 10))
+ (def N 10) ;; constant
+ 
  ;; looped signal definition
- 
  ;; will be expanded into 10 signals/registers
- (def N 10)
- (def-regs a N (range 10 0))
- 
- (def-reg a (range 10 0) (val 10))
- (def-wire b (range 10 0) (val 10))
+ (def-n c N (range 10 0))
 
  ;; register logic
  (when (rising-edge iCLK_50)
-   (set a (0) (xor a (ref iKEY 0))))
+   (set c 0 (xor c (ref iKEY 0))))
 
  ;; combinatorial logic
- (set (b (downto 3 0)) (iKEY (downto 3 0)))
- (set (b (at 10 9 8 7))
-      (iKEY (at 3 2 1 0)))
+ (set b (range 3 0) (iKEY (range 3 0)))
+ (set b (at 10 9 8 7) (iKEY (at 3 2 1 0)))
 
  ;; ASIP instructions
  (def-instruction (shift-regs)
-   (set-regs (a 9 1) (a 8 0)))
-
+   (set-n (c 9 1) (c 8 0)))
  )
-
-
-
 
 ;; here is how user code will look like (python style):
 ;; def-i/o:
