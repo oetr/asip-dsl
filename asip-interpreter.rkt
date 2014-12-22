@@ -24,13 +24,106 @@
   ;; external I/O that can be set by the user
   ;; returns a sorted list of all definitions
   (define (traverse-and-merge code)
-    
     )
-
   ;; extract necessary state from the code
   ;; registers, initialize them
-  
   )
+
+
+(define (eval exp env)
+  (cond ((self-evaluating? exp) exp)
+        ((variable? exp) (lookup-variable-value exp env))
+        ((quoted? exp) (text-of-quotation exp))
+        ((assignment? exp) (eval-assignment exp env))
+        ((definition? exp) (eval-definition exp env))
+        ((if? exp) (eval-if exp env))
+        ((lambda? exp)
+         (make-procedure (lambda-parameters exp)
+                         (lambda-body exp)
+                         env))
+        ((begin? exp)
+         (eval-sequence (begin-actions exp) env))
+        ((cond? exp) (eval (cond->if exp) env))
+        ((application? exp)
+         (apply (eval (operator exp) env)
+                (list-of-values (operands exp) env)))
+        (else
+         (error "Unknown expression type - EVAL" exp))))
+
+
+
+(eval '(define a 10) empty)
+
+
+
+
+(define (interpreter code)
+  ())
+
+(define empty-env
+  (lambda () (list 'empty-env)))
+
+(define extend-env
+  (lambda (var val env)
+    (list 'extend-env var val env)))
+
+
+(define apply-env
+  (lambda (env search-var)
+    (cond
+     ((eqv? (car env) 'empty-env)
+      (report-no-binding-found search-var))
+     ((eqv? (car env) 'extend-env)
+      (let ((saved-var (cadr env))
+            (saved-val (caddr env))
+            (saved-env (cadddr env)))
+        (if (eqv? search-var saved-var)
+            saved-val
+            (apply-env saved-env search-var))))
+     (else
+      (report-invalid-env env)))))
+
+
+(define report-no-binding-found
+  (lambda (search-var)
+    (error 'apply-env "No binding for ~s" search-var)))
+(define report-invalid-env
+  (lambda (env)
+    (error 'apply-env "Bad environment: ~s" env)))
+
+
+(define (var-exp var) var)
+(define (lambda-exp vars lc-exp) `(lambda ,vars ,lc-exp))
+(define (app-exp var lc-exp) `(lambda (,var) ,lc-exp))
+
+(define occurs-free?
+  (lambda (search-var exp)
+    (cond
+     ((var-exp? exp) (eqv? search-var (var-exp->var exp)))
+     ((lambda-exp? exp)
+      (and
+       (not (eqv? search-var (lambda-exp->bound-var exp)))
+       (occurs-free? search-var (lambda-exp->body exp))))
+     (else
+      (or
+       (occurs-free? search-var (app-exp->rator exp))
+       (occurs-free? search-var (app-exp->rand exp)))))))
+
+
+(define (parse-expression datum)
+  (cond
+   ((symbol? datum) (var-exp datum))
+   ((pair? datum)
+    (if (eqv? (car datum) 'lambda)
+        (lambda-exp
+         (car (cadr datum))
+         (parse-expression (caddr datum)))
+        (app-exp
+         (parse-expression (car datum))
+         (parse-expression (cadr datum)))))
+   (else (report-invalid-concrete-syntax datum))))
+
+(parse-expression '(define a 10))
 
 
 ;; Racket style code looks
@@ -71,8 +164,6 @@
    (for ([i 0 10]) ;; come out as a counter
      (add-regs)
      (add-regs))
-
-
  )
 
 ;; here is how user code will look like (python style):
