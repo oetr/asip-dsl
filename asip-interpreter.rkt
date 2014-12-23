@@ -30,6 +30,42 @@
   )
 
 
+;; Simulator: Interpreter approach
+#|
+- Analyze the expressions 
+- Execute the expressions
+
+- It is important to analyze the expressions before their execution because many will be executed "in parallel".
+- A merger of SICP evaluator and SICP circuit simulator is needed.
+- The circuit simulator can be used to simulate the parallel events of a circuit that are allowed in ASIP.
+
+;; Analysis
+- Which wires and registers are there?
+- What will be executed next (scheduler)?
+- What is the result of execution?
+- Sequential ASIP instruction execution
+
+|#
+
+;; VHDL-Compiler: Interpreter approach
+#|
+- Analyze the expressions 
+- Compile to VHDL
+
+;; Analysis part 1: logic without ASIP
+- Find all signnals and their types
+- Find I/O signals
+- 
+
+;; Analysis part 2: logic without ASIP
+- ASIP instructions definition
+- Convert ASIP code to a state machine
+
+|#
+
+
+
+
 (define (eval exp env)
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) (lookup-variable-value exp env))
