@@ -1,3 +1,4 @@
+(require rackunit)
 ;; Current problem with the macro solution:
 ;; two definitions of the same thing:
 ;; 1) simulator,
@@ -15,19 +16,6 @@
 
 ;; The simulator should support concurrent execution
 ;; Should probably add delays for all standard operations
-
-(define (sim-eval code)
-  ;; traverse the code and find/merge:
-  ;; ASIP description---ASIP instructions
-  ;; ASIP code
-  ;; signal/register definitions
-  ;; external I/O that can be set by the user
-  ;; returns a sorted list of all definitions
-  (define (traverse-and-merge code)
-    )
-  ;; extract necessary state from the code
-  ;; registers, initialize them
-  )
 
 
 ;; Simulator: Interpreter approach
@@ -53,122 +41,112 @@
 - Compile to VHDL
 
 ;; Analysis part 1: logic without ASIP
-- Find all signnals and their types
+- Find all signals and their types
 - Find I/O signals
-- 
+- Interpret combinatorial logic
+- Interpret register transfer logic
 
-;; Analysis part 2: logic without ASIP
+;; Analysis part 2: logic with ASIP
 - ASIP instructions definition
 - Convert ASIP code to a state machine
-
 |#
 
+;; to check whether an s-expression is a signal definition
+;; differentiate between 
+(define (is-signal-definition? s-expr)
+  (or (and (list? s-expr)
+           (symbol=? 'def (car s-expr))
+           (not (empty? (cdr s-expr)))
+           (symbol? (cadr s-expr)))
+      (and (list? s-expr)
+           (symbol=? 'def-vector (car s-expr)))))
+
+;; Test cases
+(test-case "signal definition"
+           (check-true (is-signal-definition?
+                        '(def a 10))))
+(test-case "procedure definition"
+           (check-false (is-signal-definition?
+                         '(def (a) 10))))
+(test-case "vector of signals definition"
+           (check-true (is-signal-definition?
+                        '(def-vector (a) 10))))
 
 
+(define (is-procedure-definition? s-expr)
+  (and (list? s-expr)
+       (symbol=? 'def (car s-expr))
+       (not (empty? (cdr s-expr)))
+       (list? (cadr s-expr))))
 
-(define (eval exp env)
-  (cond ((self-evaluating? exp) exp)
-        ((variable? exp) (lookup-variable-value exp env))
-        ((quoted? exp) (text-of-quotation exp))
-        ((assignment? exp) (eval-assignment exp env))
-        ((definition? exp) (eval-definition exp env))
-        ((if? exp) (eval-if exp env))
-        ((lambda? exp)
-         (make-procedure (lambda-parameters exp)
-                         (lambda-body exp)
-                         env))
-        ((begin? exp)
-         (eval-sequence (begin-actions exp) env))
-        ((cond? exp) (eval (cond->if exp) env))
-        ((application? exp)
-         (apply (eval (operator exp) env)
-                (list-of-values (operands exp) env)))
-        (else
-         (error "Unknown expression type - EVAL" exp))))
+;; Test cases
+(test-case "signal definition"
+           (check-false (is-procedure-definition?
+                        '(def a 10))))
+(test-case "procedure definition"
+           (check-true (is-procedure-definition?
+                         '(def (a) 10))))
+(test-case "vector of signals definition"
+           (check-false (is-procedure-definition?
+                         '(def-vector (a) 10))))
 
 
+(define (is-i/o-definition? s-expr)
+  (and (list? s-expr)
+       (symbol=? 'def-i/o (car s-expr))))
 
-(eval '(define a 10) empty)
+(test-case "i/o definition"
+           (check-true (is-i/o-definition?
+                         '(def-i/o a 10))))
+
+(define (sim-eval code)
+  ;; traverse the code and find/merge:
+  ;; ASIP description---ASIP instructions
+  ;; ASIP code
+  ;; signal/register definitions
+  ;; external I/O that can be set by the user
+  ;; returns a sorted list of all definitions
+  (define expression-not-empty? (not (empty? code)))
+  (define expression #f)
+  (when expression-not-empty?
+    (set! expression (car code)))
+  (cond [(not expression-not-empty?) #t]
+        [(is-signal-definition? expression)
+         (printf "signal definition~n")
+         (sim-eval (cdr code))]
+        [(is-procedure-definition? expression)
+         (printf "procedure definition~n")
+         (sim-eval (cdr code))]
+        [(is-i/o-definition? expression)
+         (printf "i/o definition~n")
+         (sim-eval (cdr code))])
+  ;; extract necessary state from the code
+  ;; registers, initialize them
+  )
+
+(sim-eval '((def (a) 10)
+            (def a 10)
+            (def-i/o a 10)))
 
 
-
-
-(define (interpreter code)
+;; to find constant, signals, signal vectors, nested vectors
+(define (find-signal-definitions code)
+  ;; to find signal definitions
+  ;; add to the global signal definitions
+  ;; TODO: consider scope and free variables
+  ()
+  ;; constant is used read-only
+  ;; TODO: signal used as write somewhere in the asip should be recognized
   ())
-
-(define empty-env
-  (lambda () (list 'empty-env)))
-
-(define extend-env
-  (lambda (var val env)
-    (list 'extend-env var val env)))
-
-
-(define apply-env
-  (lambda (env search-var)
-    (cond
-     ((eqv? (car env) 'empty-env)
-      (report-no-binding-found search-var))
-     ((eqv? (car env) 'extend-env)
-      (let ((saved-var (cadr env))
-            (saved-val (caddr env))
-            (saved-env (cadddr env)))
-        (if (eqv? search-var saved-var)
-            saved-val
-            (apply-env saved-env search-var))))
-     (else
-      (report-invalid-env env)))))
-
-
-(define report-no-binding-found
-  (lambda (search-var)
-    (error 'apply-env "No binding for ~s" search-var)))
-(define report-invalid-env
-  (lambda (env)
-    (error 'apply-env "Bad environment: ~s" env)))
-
-
-(define (var-exp var) var)
-(define (lambda-exp vars lc-exp) `(lambda ,vars ,lc-exp))
-(define (app-exp var lc-exp) `(lambda (,var) ,lc-exp))
-
-(define occurs-free?
-  (lambda (search-var exp)
-    (cond
-     ((var-exp? exp) (eqv? search-var (var-exp->var exp)))
-     ((lambda-exp? exp)
-      (and
-       (not (eqv? search-var (lambda-exp->bound-var exp)))
-       (occurs-free? search-var (lambda-exp->body exp))))
-     (else
-      (or
-       (occurs-free? search-var (app-exp->rator exp))
-       (occurs-free? search-var (app-exp->rand exp)))))))
-
-
-(define (parse-expression datum)
-  (cond
-   ((symbol? datum) (var-exp datum))
-   ((pair? datum)
-    (if (eqv? (car datum) 'lambda)
-        (lambda-exp
-         (car (cadr datum))
-         (parse-expression (caddr datum)))
-        (app-exp
-         (parse-expression (car datum))
-         (parse-expression (cadr datum)))))
-   (else (report-invalid-concrete-syntax datum))))
-
-(parse-expression '(define a 10))
-
 
 ;; Racket style code looks
 (hw
  ;; inputs and outputs
- (def-i/o (list (iCLK_50 in)
-                (iKEY in 3 0)
-                (oLEDR out 17 0)
-                (oLEDG out 7 0)))
+ (def-i/o
+   (iCLK_50 in)
+   (iKEY in 3 0)
+   (oLEDR out 17 0)
+   (oLEDG out 7 0))
 
  ;; registers, wires
  (def a (range 10 0) 10)
@@ -199,12 +177,4 @@
  (define-asip a00
    (for ([i 0 10]) ;; come out as a counter
      (add-regs)
-     (add-regs))
- )
-
-;; here is how user code will look like (python style):
-;; def-i/o:
-;;   iCLK_50 in
-;;   iKEY    in  3  0
-;;   oLEDR   out 17 0
-;;   oLEDG   out 7  0
+     (add-regs))))
