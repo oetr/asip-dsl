@@ -51,9 +51,16 @@
 - Convert ASIP code to a state machine
 |#
 
+
+(define (variable? s-expr)
+  (symbol? s-expr))
+
+;; Test cases
+(test-case "variable" (check-true (variable? 'a)))
+
 ;; to check whether an s-expression is a signal definition
 ;; differentiate between 
-(define (is-signal-definition? s-expr)
+(define (signal-definition? s-expr)
   (or (and (list? s-expr)
            (symbol=? 'def (car s-expr))
            (not (empty? (cdr s-expr)))
@@ -63,17 +70,17 @@
 
 ;; Test cases
 (test-case "signal definition"
-           (check-true (is-signal-definition?
+           (check-true (signal-definition?
                         '(def a 10))))
 (test-case "procedure definition"
-           (check-false (is-signal-definition?
+           (check-false (signal-definition?
                          '(def (a) 10))))
 (test-case "vector of signals definition"
-           (check-true (is-signal-definition?
+           (check-true (signal-definition?
                         '(def-vector (a) 10))))
 
 
-(define (is-procedure-definition? s-expr)
+(define (procedure-definition? s-expr)
   (and (list? s-expr)
        (symbol=? 'def (car s-expr))
        (not (empty? (cdr s-expr)))
@@ -81,31 +88,61 @@
 
 ;; Test cases
 (test-case "signal definition"
-           (check-false (is-procedure-definition?
-                        '(def a 10))))
+           (check-false (procedure-definition?
+                         '(def a 10))))
 (test-case "procedure definition"
-           (check-true (is-procedure-definition?
-                         '(def (a) 10))))
+           (check-true (procedure-definition?
+                        '(def (a) 10))))
 (test-case "vector of signals definition"
-           (check-false (is-procedure-definition?
+           (check-false (procedure-definition?
                          '(def-vector (a) 10))))
 
-(define (is-i/o-definition? s-expr)
+(define (i/o-definition? s-expr)
   (and (list? s-expr)
        (symbol=? 'def-i/o (car s-expr))))
 
 (test-case "i/o definition"
-           (check-true (is-i/o-definition?
-                         '(def-i/o a 10))))
+           (check-true (i/o-definition?
+                        '(def-i/o a 10))))
 
 
-(define (is-asip-definition? s-expr)
+(define (asip-definition? s-expr)
   (and (list? s-expr)
        (symbol=? 'def-asip (car s-expr))))
 
 (test-case "asip definition"
-           (check-false (is-asip-definition?
-                         '(def-asip a 10))))
+           (check-true (asip-definition?
+                        '(def-asip a 10))))
+
+(define (assignment? s-expr)
+  (and (list? s-expr)
+       (symbol=? 'set (car s-expr))))
+
+(test-case "assignment"
+           (check-false (assignment?
+                         '(def-asip a 10)))
+           (check-true (assignment?
+                        '(set a 10))))
+
+(define (conditional? s-expr)
+  (and (list? s-expr)
+       (or (symbol=? 'when (car s-expr))
+           (symbol=? 'if (car s-expr))
+           (symbol=? 'cond (car s-expr)))))
+
+(test-case "conditional"
+           (check-true (conditional?
+                        '(when a 10)))
+           (check-true (conditional?
+                        '(if a 10))))
+
+(define (loop? s-expr)
+  (and (list? s-expr)
+       (symbol=? 'for (car s-expr))))
+
+(test-case "loop"
+           (check-true (loop?
+                        '(for a 10))))
 
 (define (sim-eval code)
   ;; traverse the code and find/merge:
@@ -114,25 +151,32 @@
   ;; signal/register definitions
   ;; external I/O that can be set by the user
   ;; returns a sorted list of all definitions
-  (define expression-not-empty? (not (empty? code)))
-  (define expression #f)
-  (when expression-not-empty?
-    (set! expression (car code)))
-  (cond [(not expression-not-empty?) #t]
-        [(is-signal-definition? expression)
+  (define exp-not-empty? (not (empty? code)))
+  (define exp #f)
+  (when exp-not-empty?
+    (set! exp (car code)))
+  (cond [(not exp-not-empty?) #t]
+        [(variable? exp)]
+        [(signal-definition? exp)
          (printf "signal definition~n")
          (sim-eval (cdr code))]
-        [(is-procedure-definition? expression)
+        [(procedure-definition? exp)
          (printf "procedure definition~n")
          (sim-eval (cdr code))]
-        [(is-i/o-definition? expression)
+        [(i/o-definition? exp)
          (printf "i/o definition~n")
          (sim-eval (cdr code))]
-        [(is-asip-definition? expression)
+        [(assignment? exp)
+         (printf "assignment~n")
+         (sim-eval (cdr code))]
+        [(conditional? exp)
+         (printf "conditional~n")
+         (sim-eval (cdr code))]
+        [(asip-definition? exp)
          (printf "asip definition~n")
          (sim-eval (cdr code))]
         [else
-         (error 'sim-eval "unknown expression: ~a~n" expression)])
+         (error 'sim-eval "unknown expression: ~a~n" exp)])
   )
 
 ;; Racket style code looks
