@@ -173,31 +173,25 @@
 (define (analyze-signal a-signal)
   (match a-signal
     [(list 'def-vector name length (list 'range from to) init)
-     (array name length 'undefined (sort (list from to) <) init)]
+     (array name length 'undefined (list from to) init)]
     [(list 'def-vector name length (list 'range from to))
-     (array name length 'undefined (sort (list from to) <)
+     (array name length 'undefined (list from to)
             'undefined)]
     [(list 'def name (list 'range from to) init)
-     (signal name 'undefined (sort (list from to) <) init)]
+     (signal name 'undefined (list from to) init)]
     [(list 'def name (list 'range from to))
-     (signal name 'undefined (sort (list from to) <) 'undefined)]
+     (signal name 'undefined (list from to) 'undefined)]
     [(list 'def name (list init-vals ...))
      (define a-range init-vals)
      (define from 0)
      (define to (- (length a-range) 1))
-     (signal name 'undefined (sort (list from to) <) init-vals)]
+     (signal name 'undefined (list from to) init-vals)]
     [(list 'def name init)
      (signal name 'undefined 'undefined init)]
     [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)]))
 
 
 (define (sim-eval code)
-  ;; traverse the code and find/merge:
-  ;; ASIP description---ASIP instructions
-  ;; ASIP code
-  ;; signal/register definitions
-  ;; external I/O that can be set by the user
-  ;; returns a sorted list of all definitions
   (define exp-not-empty? (not (empty? code)))
   (define exp #f)
   (when exp-not-empty?
@@ -230,11 +224,10 @@
          (printf "loop~n")
          (sim-eval (cdr code))]
         [else
-         (error 'sim-eval "unknown expression: ~a~n" exp)])
-  )
+         (error 'sim-eval "unknown expression: ~a~n" exp)]))
 
 
-;; Racket style code looks
+;; Example app
 (sim-eval
  '(
    (def-i/o ;; maybe def-interface
@@ -247,6 +240,7 @@
    
    ;; registers, wires
    (def a (range 10 0) 10)
+   (def ab (range 10 0) 10)
    (def b (range 10 0) 10)
    (def c (range 10 0) (others 0)) ;; set range and default values
    (def d (make-list 10 0)) ;; set default values only, derive range
