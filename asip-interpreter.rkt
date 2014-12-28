@@ -62,12 +62,14 @@
 ;; to check whether an s-expression is a signal definition
 ;; differentiate between 
 (define (signal-definition? s-expr)
-  (or (and (list? s-expr)
-           (symbol=? 'def (car s-expr))
-           (not (empty? (cdr s-expr)))
-           (symbol? (cadr s-expr)))
-      (and (list? s-expr)
-           (symbol=? 'def-vector (car s-expr)))))
+  (and (list? s-expr)
+       (symbol=? 'def (car s-expr))
+       (not (empty? (cdr s-expr)))
+       (symbol? (cadr s-expr))))
+
+(define (vector-definition? s-expr)
+  (and (list? s-expr)
+       (symbol=? 'def-vector (car s-expr))))
 
 ;; Test cases
 (test-case "signal definition"
@@ -77,7 +79,7 @@
            (check-false (signal-definition?
                          '(def (a) 10))))
 (test-case "vector of signals definition"
-           (check-true (signal-definition?
+           (check-true (vector-definition?
                         '(def-vector (a) 10))))
 
 
@@ -145,9 +147,23 @@
            (check-true (loop?
                         '(for a 10))))
 
+
+;; To convert information about signal i/o into structures
+;; Superficial analysis in the beginning, upon reading the code
+;; In-depth analysis after everything has been read out
+(define (analyze-i/o an-i/o)
+  (define (analyze-i/o-signal expression)
+    (match expression
+      [(list definitions ...)]))
+  
+
+  )
+
 ;; signal/variable/constant structure
-(struct signal (name type range initial) #:transparent #:mutable)
-(struct array (name length type range initial) #:transparent #:mutable)
+(struct signal (name type range initial)
+        #:transparent #:mutable)
+(struct array (name length type range initial)
+        #:transparent #:mutable)
 
 ;; To convert information about signal/variable/constant
 ;; into a structure
@@ -159,16 +175,17 @@
     [(list 'def-vector name length (list 'range from to) init)
      (array name length 'undefined (sort (list from to) <) init)]
     [(list 'def-vector name length (list 'range from to))
-     (array name length 'undefined (sort (list from to) <) 'undefined)]
+     (array name length 'undefined (sort (list from to) <)
+            'undefined)]
     [(list 'def name (list 'range from to) init)
      (signal name 'undefined (sort (list from to) <) init)]
     [(list 'def name (list 'range from to))
      (signal name 'undefined (sort (list from to) <) 'undefined)]
-    [(list 'def name (list a ...))
-     (define a-range a)
+    [(list 'def name (list init-vals ...))
+     (define a-range init-vals)
      (define from 0)
      (define to (- (length a-range) 1))
-     (signal name 'undefined (sort (list from to) <) 'undefined)]
+     (signal name 'undefined (sort (list from to) <) init-vals)]
     [(list 'def name init)
      (signal name 'undefined 'undefined init)]
     [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)]))
@@ -187,8 +204,10 @@
     (set! exp (car code)))
   (cond [(not exp-not-empty?) #t]
         [(variable? exp)]
+        [(vector-definition? exp)
+         (printf "deriving vector~n")
+         (sim-eval (cdr code))]
         [(signal-definition? exp)
-         (printf "signal definition~n")
          (printf "deriving signal: ~a~n"
                  (analyze-signal exp))
          (sim-eval (cdr code))]
@@ -207,20 +226,25 @@
         [(asip-definition? exp)
          (printf "asip definition~n")
          (sim-eval (cdr code))]
+        [(loop? exp)
+         (printf "loop~n")
+         (sim-eval (cdr code))]
         [else
          (error 'sim-eval "unknown expression: ~a~n" exp)])
   )
 
+
 ;; Racket style code looks
 (sim-eval
  '(
-   ;; inputs and outputs
-   (def-i/o
-     (iCLK_50 'in)
-     (iKEY    'in  (range 3 0))
-     (oLEDR   'out (range 17 0))
-     (oLEDG   'out (range 7 0)))
-
+   (def-i/o ;; maybe def-interface
+     ;; inputs and outputs
+     (i (def iCLK_50))
+     (i (def iKEY (range 3 0)))
+     (o (def oLEDR (range 17 0)))
+     (o (def oLEDG (range 7 0)))
+     (io (def GPIO_0 (range 31 0))))
+   
    ;; registers, wires
    (def a (range 10 0) 10)
    (def b (range 10 0) 10)
@@ -229,10 +253,13 @@
    (def e (list 1 0 0 1 1 1 0))
    (def N 10) ;; constant
    
-   
    ;; looped signal definition
    ;; will be expanded into 10 signals/registers
    (def-vector c N (range 10 0))
+
+   ;; looped processing
+   (for ([i (range 0 10)])
+     (set a 0 (ref (* i 10) 0)))
 
    ;; register logic
    (when (rising-edge iCLK_50)
