@@ -1,3 +1,4 @@
+(require racket/base)
 (require rackunit)
 ;; Current problem with the macro solution:
 ;; two definitions of the same thing:
@@ -144,6 +145,55 @@
            (check-true (loop?
                         '(for a 10))))
 
+;; signal/variable/constant structure
+(struct signal (name type range initial) #:transparent #:mutable)
+
+
+(define-syntax list->values
+  (syntax-rules ()
+    [(_ a-list)
+     (for ([element a-list]
+           [i (length a-list)])
+       (eval `(define ,(string->symbol
+                        (string-append "a"
+                                       (number->string i)))
+                (quote ,element))))]))
+
+(match '(def N 10)
+  [(list 'def name (list 'range from to) init)
+   ;; TODO: figure out the type based on signal usage context
+   ;; (define type (if (> (abs (- from to)) 0)
+   ;;                  'std-logic-vector
+   ;;                  'integer)
+   (signal name 'undefined (sort (list from to) <) init)]
+  [(list 'def name (list 'range from to))
+   (signal name 'undefined (sort (list from to) <) 'undefined)]
+  [(list 'def name (list a ...))
+   (define a-range a)
+   (define from 0)
+   (define to (- (length a-range) 1))
+   (signal name 'undefined (sort (list from to) <) 'undefined)]
+  [(list 'def name init)
+   (signal name 'undefined 'undefined init)]
+  [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)])
+
+;; to convert information about signal/variable/constant
+;; into a structure
+(define (analyze-signal a-signal)
+  (if (and (not (empty? (cdr a-signal)))
+           (symbol? (cadr a-signal))
+                
+           
+  (define-values (name range initial)
+    (values (cadr a-signal)
+            (if (caddr a-signal)
+            (cadddr a-signal)))
+  (define name (cadr a-signal))  
+  (define has-range? )
+  (define range (when )
+  (signal )
+  )
+
 (define (sim-eval code)
   ;; traverse the code and find/merge:
   ;; ASIP description---ASIP instructions
@@ -184,15 +234,19 @@
  '(
    ;; inputs and outputs
    (def-i/o
-     (iCLK_50 in)
-     (iKEY in 3 0)
-     (oLEDR out 17 0)
-     (oLEDG out 7 0))
+     (iCLK_50 'in)
+     (iKEY    'in  (range 3 0))
+     (oLEDR   'out (range 17 0))
+     (oLEDG   'out (range 7 0)))
 
    ;; registers, wires
    (def a (range 10 0) 10)
    (def b (range 10 0) 10)
+   (def c (range 10 0) (others 0)) ;; set range and default values
+   (def d (make-list 10 0)) ;; set default values only, derive range
+   (def e (list 1 0 0 1 1 1 0))
    (def N 10) ;; constant
+   
    
    ;; looped signal definition
    ;; will be expanded into 10 signals/registers
