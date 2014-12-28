@@ -147,52 +147,29 @@
 
 ;; signal/variable/constant structure
 (struct signal (name type range initial) #:transparent #:mutable)
-
-
-(define-syntax list->values
-  (syntax-rules ()
-    [(_ a-list)
-     (for ([element a-list]
-           [i (length a-list)])
-       (eval `(define ,(string->symbol
-                        (string-append "a"
-                                       (number->string i)))
-                (quote ,element))))]))
-
-(match '(def N 10)
-  [(list 'def name (list 'range from to) init)
-   ;; TODO: figure out the type based on signal usage context
-   ;; (define type (if (> (abs (- from to)) 0)
-   ;;                  'std-logic-vector
-   ;;                  'integer)
-   (signal name 'undefined (sort (list from to) <) init)]
-  [(list 'def name (list 'range from to))
-   (signal name 'undefined (sort (list from to) <) 'undefined)]
-  [(list 'def name (list a ...))
-   (define a-range a)
-   (define from 0)
-   (define to (- (length a-range) 1))
-   (signal name 'undefined (sort (list from to) <) 'undefined)]
-  [(list 'def name init)
-   (signal name 'undefined 'undefined init)]
-  [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)])
+(struct array (name length type range initial) #:transparent #:mutable)
 
 ;; to convert information about signal/variable/constant
 ;; into a structure
+;; TODO: figure out the type based on signal usage context
 (define (analyze-signal a-signal)
-  (if (and (not (empty? (cdr a-signal)))
-           (symbol? (cadr a-signal))
-                
-           
-  (define-values (name range initial)
-    (values (cadr a-signal)
-            (if (caddr a-signal)
-            (cadddr a-signal)))
-  (define name (cadr a-signal))  
-  (define has-range? )
-  (define range (when )
-  (signal )
-  )
+  (match a-signal
+    [(list 'def-vector name length (list 'range from to) init)
+     (array name length 'undefined (sort (list from to) <) init)]
+    [(list 'def-vector name length (list 'range from to))
+     (array name length 'undefined (sort (list from to) <) 'undefined)]
+    [(list 'def name (list 'range from to) init)
+     (signal name 'undefined (sort (list from to) <) init)]
+    [(list 'def name (list 'range from to))
+     (signal name 'undefined (sort (list from to) <) 'undefined)]
+    [(list 'def name (list a ...))
+     (define a-range a)
+     (define from 0)
+     (define to (- (length a-range) 1))
+     (signal name 'undefined (sort (list from to) <) 'undefined)]
+    [(list 'def name init)
+     (signal name 'undefined 'undefined init)]
+    [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)]))
 
 (define (sim-eval code)
   ;; traverse the code and find/merge:
@@ -209,6 +186,8 @@
         [(variable? exp)]
         [(signal-definition? exp)
          (printf "signal definition~n")
+         (printf "deriving signal: ~a~n"
+                 (analyze-signal exp))
          (sim-eval (cdr code))]
         [(procedure-definition? exp)
          (printf "procedure definition~n")
