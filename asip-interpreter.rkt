@@ -149,8 +149,10 @@
 (struct signal (name type range initial) #:transparent #:mutable)
 (struct array (name length type range initial) #:transparent #:mutable)
 
-;; to convert information about signal/variable/constant
+;; To convert information about signal/variable/constant
 ;; into a structure
+;; Superficial analysis in the beginning, upon reading the code
+;; In-depth analysis after everything has been read out
 ;; TODO: figure out the type based on signal usage context
 (define (analyze-signal a-signal)
   (match a-signal
@@ -170,6 +172,7 @@
     [(list 'def name init)
      (signal name 'undefined 'undefined init)]
     [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)]))
+
 
 (define (sim-eval code)
   ;; traverse the code and find/merge:
