@@ -42,8 +42,10 @@
 - Compile to VHDL
 
 ;; Analysis part 1: logic without ASIP
-- Find all signals and their types
-- Find I/O signals
+- Find all signals and their types (done TODO: types)
+- Find I/O signals (done TODO: types)
+- Find all assignments (done)
+- Store signals and assignments in a global environment
 - Interpret combinatorial logic
 - Interpret register transfer logic
 
