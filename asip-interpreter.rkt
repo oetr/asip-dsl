@@ -1,5 +1,5 @@
-(require racket/base)
 (require rackunit)
+(require racket/base)
 ;; Current problem with the macro solution:
 ;; two definitions of the same thing:
 ;; 1) simulator,
@@ -117,14 +117,14 @@
            (check-true (asip-definition?
                         '(def-asip a 10))))
 
-(define (assignment? s-expr)
+(define (assignment-expression? s-expr)
   (and (list? s-expr)
        (symbol=? 'set (car s-expr))))
 
-(test-case "assignment"
-           (check-false (assignment?
+(test-case "assignment expression"
+           (check-false (assignment-expression?
                          '(def-asip a 10)))
-           (check-true (assignment?
+           (check-true (assignment-expression?
                         '(set a 10))))
 
 (define (conditional? s-expr)
@@ -218,9 +218,10 @@
          (printf "procedure definition~n")
          (sim-eval (cdr code))]
         [(i/o-definition? exp)
+         (printf "i/o definition~n")
          (analyze-i/o (cdr exp))
          (sim-eval (cdr code))]
-        [(assignment? exp)
+        [(assignment-expression? exp)
          (printf "assignment: ~a~n"
                  (analyze-assignment exp))
          (sim-eval (cdr code))]
@@ -240,7 +241,6 @@
 ;; To convert information about signal i/o into structures
 ;; Superficial analysis in the beginning, upon reading the code
 ;; In-depth analysis after everything has been read out
-
 (define (analyze-assignment exp)
   (match exp
     [(list 'set name (list from to) value)
@@ -250,7 +250,7 @@
     [else
      (error 'analyze-assignment "invalid assignment: ~n~a~n" exp)]))
 
-;; torn on LED light
+;; turn on LED
 (sim-eval
  '(
    (def-i/o ;; maybe def-interface

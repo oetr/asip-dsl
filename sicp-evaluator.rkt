@@ -1,36 +1,34 @@
-;;; Chapter 4: Metalinguistic Abstraction
+;; SICP Chapter 4: Metalinguistic Abstraction
+;; Converted to use Racket's mutable lists (mlist, mcar, mcdr)
+;; TODO: the compilation to VHDL should be done in two steps
+;; and so the interpretation, because the intended language is not
+;; really scheme-like because it should be inferring signal types
+;; dynamically, based on their usage context
+;; ALso, the procedures are not "executed" right away...it's more like the circuit simulator because al statements are supposed to run in parallel
+;; Also, arithmetic functionality, like and, xor, * cannot be executed for more than one argument at the same time, and should be cascaded
+;; TODO: explore a scheme-like language
 (define (ev exp env)
   (cond [(self-evaluating? exp)
-         ;;(printf "self~n")
          exp]
         [(variable? exp)
-          ;;(printf "variable: ~a~n" exp)
          (lookup-variable-value exp env)]
         [(quoted? exp)
-          ;;(printf "quoted: ~a~n" exp)
          (text-of-quotation exp)]
         [(assignment? exp)
-          ;;(printf "assignment: ~a~n" exp)
          (eval-assignment exp env)]
         [(definition? exp)
-          ;;(printf "definition: ~a~n" exp)
          (eval-definition exp env)]
         [(if? exp)
-          ;;(printf "if: ~a~n" exp)
          (eval-if exp env)]
         [(lambda? exp)
-          ;;(printf "lambda~n")
          (make-procedure (lambda-parameters exp)
                          (lambda-body exp)
                          env)]
         [(begin? exp)
-          ;;(printf "begin~n")
          (eval-sequence (begin-actions exp) env)]
         [(cond? exp)
-          ;;(printf "cond~n")
          (ev (cond->if exp) env)]
         [(application? exp)
-          ;;(printf "application~n")
          (appl (ev (operator exp) env)
                (list-of-values (operands exp) env))]
         [else
@@ -315,9 +313,10 @@
          (mlist '+ +)
          (mlist '- -)
          (mlist '= =)
-         (mlist 'eval ev)
-         (mlist 'apply appl)
-         (mlist 'list list)))
+         ;;(mlist 'eval ev)
+         ;;(mlist 'apply appl)
+         ;;(mlist 'list list)
+         ))
 
 (define (primitive-procedure-names)
   (mmap mcar
@@ -370,3 +369,16 @@
       y
       (cons (car x)
             (append (cdr x) y))))
+
+
+(ev '(begin
+       (define (factorial n)
+         (if (= n 1)
+             1
+             (* (factorial (- n 1)) n)))
+       (define a 30)
+       (define b 100)
+       (cond [(= 0 1) 0]
+             [else 10])
+       (factorial (+ a b)))
+    the-global-environment)
