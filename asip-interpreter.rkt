@@ -151,18 +151,25 @@
 ;; To convert information about signal i/o into structures
 ;; Superficial analysis in the beginning, upon reading the code
 ;; In-depth analysis after everything has been read out
-(define (analyze-i/o an-i/o)
+(define (analyze-i/o io-exp)
   (define (analyze-i/o-signal expression)
     (match expression
-      [(list definitions ...)]))
-  
+      [(list 'i (list definition ...))
+       (printf "INPUT: ~a~n" (analyze-signal definition))]
+      [(list 'o (list definition ...))
+       (printf "OUTPUT: ~a~n" (analyze-signal definition))]
+      [(list 'io (list definition ...))
+       (printf "BIDIRECTIONAL: ~a~n" (analyze-signal definition))]
+      [_ (printf "no match! ~n" )]))
+  (map analyze-i/o-signal io-exp))
 
-  )
 
 ;; signal/variable/constant structure
 (struct signal (name type range initial)
         #:transparent #:mutable)
 (struct array (name length type range initial)
+        #:transparent #:mutable)
+(struct assignment (name range value)
         #:transparent #:mutable)
 
 ;; To convert information about signal/variable/constant
@@ -188,6 +195,8 @@
      (signal name 'undefined (list from to) init-vals)]
     [(list 'def name init)
      (signal name 'undefined 'undefined init)]
+    [(list 'def name)
+     (signal name 'undefined 'undefined 'undefined)]
     [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)]))
 
 
@@ -209,10 +218,11 @@
          (printf "procedure definition~n")
          (sim-eval (cdr code))]
         [(i/o-definition? exp)
-         (printf "i/o definition~n")
+         (analyze-i/o (cdr exp))
          (sim-eval (cdr code))]
         [(assignment? exp)
-         (printf "assignment~n")
+         (printf "assignment: ~a~n"
+                 (analyze-assignment exp))
          (sim-eval (cdr code))]
         [(conditional? exp)
          (printf "conditional~n")
@@ -226,6 +236,27 @@
         [else
          (error 'sim-eval "unknown expression: ~a~n" exp)]))
 
+
+;; To convert information about signal i/o into structures
+;; Superficial analysis in the beginning, upon reading the code
+;; In-depth analysis after everything has been read out
+
+(define (analyze-assignment exp)
+  (match exp
+    [(list 'set name (list from to) value)
+     (assignment name (list from to) value)]
+    [(list 'set name at value)
+     (assignment name at value)]
+    [else
+     (error 'analyze-assignment "invalid assignment: ~n~a~n" exp)]))
+
+;; torn on LED light
+(sim-eval
+ '(
+   (def-i/o ;; maybe def-interface
+     ;; inputs and outputs
+     (o (def oLEDR (range 17 0))))
+   (set oLEDR 0 1)))
 
 ;; Example app
 (sim-eval
