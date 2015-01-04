@@ -1,5 +1,6 @@
 (require rackunit)
 (require racket/base)
+(require compatibility/mlist)
 ;; Current problem with the macro solution:
 ;; two definitions of the same thing:
 ;; 1) simulator,
@@ -53,6 +54,22 @@
 - ASIP instructions definition
 - Convert ASIP code to a state machine
 |#
+
+;; The environment
+;; Consists of signals and assignments
+;; There are two environments:
+;; 1) consists of all variables and procedures
+;; 2) consists of all assignments
+;; Once the two have been determined, two things can be done
+;; 1) The type of variables can be determined bysed on the usage
+;; 2) Everything can be compiled to VHDL after that
+;; TODO: optimize: use a better data structure than a list
+(define (make-empty-environment) empty)
+(define (environment-empty? env) (empty? env))
+(environment-empty? (make-empty-environment))
+
+(define *environment* (make-empty-environment))
+(define *assignments* (make-empty-environment))
 
 
 (define (variable? s-expr)
