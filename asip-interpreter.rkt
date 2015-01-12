@@ -64,13 +64,49 @@
 ;; 1) The type of variables can be determined bysed on the usage
 ;; 2) Everything can be compiled to VHDL after that
 ;; TODO: optimize: use a better data structure than a list
-(define (make-empty-environment) empty)
-(define (environment-empty? env) (empty? env))
-(environment-empty? (make-empty-environment))
+(define (make-environment (names empty) (vals empty))
+  (let ([environment (map cons (reverse names) (reverse vals))])
+    (define (is-empty? env) (empty? env))
+    (define (is-bound? env name)
+      (if (is-empty? env)
+          #f
+          (or (symbol=? (caar env) name)
+              (is-bound? (cdr env) name))))
+    (define (ref env name)
+      (cond [(is-empty? env)
+             (error 'environment-ref
+                    "unbound identifier: ~a~n" name)]
+            [(symbol=? (caar env) name) (cdar env)]
+            [else (ref (cdr env) name)]))
+    (define (add! names-vals)
+      (set! environment (append names-vals environment)))
+    (lambda (command . data)
+      (match command
+        ['empty? (is-empty? environment)]
+        ['is-bound? (is-bound? environment (car data))]
+        ['ref (ref environment (car data))]
+        ['add! (add! (car data))]
+        ['dump environment]))))
 
-(define *environment* (make-empty-environment))
-(define *assignments* (make-empty-environment))
+(define (environment-is-bound? env name)
+  (env 'is-bound? name))
+(define (environment-ref env name)
+  (env 'ref name))
+(define (environment-empty? env)
+  (env 'empty?))
+(define (environment-add! env names vals)
+  (env 'add! (map cons (reverse names) (reverse vals))))
+(define (environment-dump env)
+  (env 'dump))
 
+;; Test the environment
+(define *environment* (make-environment))
+(environment-is-bound? *environment* 'e)
+(environment-empty? *environment*)
+(environment-add! *environment* '(a b c d) '(1 2 3 4))
+(environment-dump *environment*)
+(environment-is-bound? *environment* 'a)
+(environment-ref *environment* 'a)
 
 (define (variable? s-expr)
   (symbol? s-expr))
@@ -166,30 +202,37 @@
            (check-true (loop?
                         '(for a 10))))
 
+;; signal/variable/constant structure
+(struct signal (name type range initial)
+        #:transparent #:mutable)
+(struct io signal (io) #:transparent #:mutable)
+(struct array (name length type range initial)
+        #:transparent #:mutable)
+(struct assignment (name range value)
+        #:transparent #:mutable)
 
 ;; To convert information about signal i/o into structures
 ;; Superficial analysis in the beginning, upon reading the code
 ;; In-depth analysis after everything has been read out
 (define (analyze-i/o io-exp)
   (define (analyze-i/o-signal expression)
+    (define io-tag 'i)
     (match expression
-      [(list 'i (list definition ...))
-       (printf "INPUT: ~a~n" (analyze-signal definition))]
-      [(list 'o (list definition ...))
-       (printf "OUTPUT: ~a~n" (analyze-signal definition))]
-      [(list 'io (list definition ...))
-       (printf "BIDIRECTIONAL: ~a~n" (analyze-signal definition))]
-      [_ (printf "no match! ~n" )]))
+      [(list 'i _)
+       (set! io-tag 'i)]
+      [(list 'o _)
+       (set! io-tag 'o)]
+      [(list 'io _)
+       (set! io-tag 'io)]
+      [whatever
+       (error 'analyze-i/o "Unknown i/o type: ~a~n" whatever)])
+    (apply io (append (cdr (vector->list
+                            (struct->vector
+                             (analyze-signal (cadr expression)))))
+                      (list io-tag))))
   (map analyze-i/o-signal io-exp))
 
-
-;; signal/variable/constant structure
-(struct signal (name type range initial)
-        #:transparent #:mutable)
-(struct array (name length type range initial)
-        #:transparent #:mutable)
-(struct assignment (name range value)
-        #:transparent #:mutable)
+(analyze-i/o '((o (def oLEDR (range 17 0)))))
 
 ;; To convert information about signal/variable/constant
 ;; into a structure
@@ -219,42 +262,47 @@
     [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)]))
 
 
-(define (sim-eval code)
-  (define exp-not-empty? (not (empty? code)))
-  (define exp #f)
-  (when exp-not-empty?
-    (set! exp (car code)))
-  (cond [(not exp-not-empty?) #t]
-        [(variable? exp)]
-        [(vector-definition? exp)
-         (printf "deriving vector~n")
-         (sim-eval (cdr code))]
-        [(signal-definition? exp)
-         (printf "deriving signal: ~a~n"
-                 (analyze-signal exp))
-         (sim-eval (cdr code))]
-        [(procedure-definition? exp)
-         (printf "procedure definition~n")
-         (sim-eval (cdr code))]
-        [(i/o-definition? exp)
-         (printf "i/o definition~n")
-         (analyze-i/o (cdr exp))
-         (sim-eval (cdr code))]
-        [(assignment-expression? exp)
-         (printf "assignment: ~a~n"
-                 (analyze-assignment exp))
-         (sim-eval (cdr code))]
-        [(conditional? exp)
-         (printf "conditional~n")
-         (sim-eval (cdr code))]
-        [(asip-definition? exp)
-         (printf "asip definition~n")
-         (sim-eval (cdr code))]
-        [(loop? exp)
-         (printf "loop~n")
-         (sim-eval (cdr code))]
-        [else
-         (error 'sim-eval "unknown expression: ~a~n" exp)]))
+(define (parse-code code)
+  (define definitions empty)
+  (define assignments empty)
+  (define (extend-definitions! new-def)
+    (if (list? new-def)
+        (set! definitions (append new-def definitions))
+        (set! definitions (cons new-def definitions))))
+  (define (extend-assignments! new-ass)
+    (if (list? new-ass)
+        (set! assignments (append new-ass assignments))
+        (set! assignments (cons new-ass assignments))))
+  (define (sim-eval code)
+    (define exp-not-empty? (not (empty? code)))
+    (define exp #f)
+    (when exp-not-empty?
+      (set! exp (car code)))
+    (cond [(not exp-not-empty?) #t]
+          [(variable? exp)]
+          [(vector-definition? exp)
+           (sim-eval (cdr code))]
+          [(signal-definition? exp)
+           (extend-definitions! (analyze-signal exp))
+           (sim-eval (cdr code))]
+          [(procedure-definition? exp)
+           (sim-eval (cdr code))]
+          [(i/o-definition? exp)
+           (extend-definitions! (analyze-i/o (cdr exp)))
+           (sim-eval (cdr code))]
+          [(assignment-expression? exp)
+           (extend-assignments! (analyze-assignment exp))
+           (sim-eval (cdr code))]
+          [(conditional? exp)
+           (sim-eval (cdr code))]
+          [(asip-definition? exp)
+           (sim-eval (cdr code))]
+          [(loop? exp)
+           (sim-eval (cdr code))]
+          [else
+           (error 'sim-eval "unknown expression: ~a~n" exp)]))
+  (sim-eval code)
+  (cons definitions assignments))
 
 
 ;; To convert information about signal i/o into structures
@@ -269,16 +317,18 @@
     [else
      (error 'analyze-assignment "invalid assignment: ~n~a~n" exp)]))
 
-;; turn on LED
-(sim-eval
+
+;; Turn on LED
+(parse-code
  '(
    (def-i/o ;; maybe def-interface
      ;; inputs and outputs
-     (o (def oLEDR (range 17 0))))
+     (o (def oLEDR (range 17 0)))
+     (i (def oLEDG (range 17 0))))
    (set oLEDR 0 1)))
 
 ;; Example app
-(sim-eval
+(parse-code
  '(
    (def-i/o ;; maybe def-interface
      ;; inputs and outputs
