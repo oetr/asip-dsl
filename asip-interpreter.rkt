@@ -1,4 +1,5 @@
 (require rackunit)
+(require racket/format)
 (require racket/base)
 (require compatibility/mlist)
 ;; Current problem with the macro solution:
@@ -318,14 +319,98 @@
      (error 'analyze-assignment "invalid assignment: ~n~a~n" exp)]))
 
 
-;; Turn on LED
-(parse-code
- '(
-   (def-i/o ;; maybe def-interface
-     ;; inputs and outputs
-     (o (def oLEDR (range 17 0)))
-     (i (def oLEDG (range 17 0))))
-   (set oLEDR 0 1)))
+(define (io-type->vhdl io-type)
+  (match io-type ['i 'in]['o 'out]['io 'inout]
+         [else (error 'io->vhdl "unknown io type ~a~n" io-type)]))
+
+(define (type->vhdl type range)
+  (define (analyze-range range)
+    (cond [(list? range)
+           (sort range >)]
+          [(number? range)
+           (when (<= range 0)
+             (error type->vhdl "bad range: ~a~n range should be either a positive number, or two numbers~n" range))
+           (list (- range 1) 0)]
+          [(and (symbol? range)
+                (symbol=? range 'undefined))
+           (error 'type->vhdl "undefined is not good")]))
+  (match type
+    ['undefined
+     (begin
+       (define a-range (analyze-range range))
+       (~a "std_logic_vector(" (car a-range) " downto " (cadr a-range) ")"))]))
+
+(define (definitions-io defs) (vector-ref defs 0))
+(define (definitions-signals defs) (vector-ref defs 1))
+(define (definitions-procs defs) (vector-ref defs 2))
+
+(define (definitions-io-set! defs new-val)
+  (vector-set! defs 0 new-val))
+(define (definitions-signals-set! defs new-val)
+  (vector-set! defs 1 new-val))
+(define (definitions-procs-set! defs new-val)
+  (vector-set! defs 2 new-val))
+
+;; put the IO definitions first, signal definitions second, and procedure definition last
+(define (rearrange-definitions definitions)
+  (define all-definitions (vector empty empty empty))
+  (for ([def definitions])
+    (cond [(io? def)
+           (definitions-io-set! all-definitions
+             (cons def (definitions-io all-definitions)))]
+          [(signal? def)
+           (definitions-signals-set! all-definitions
+             (cons def (definitions-signals all-definitions)))]
+          [else
+           (definitions-procs-set! all-definitions
+             (cons def (definitions-procs all-definitions)))]))
+  all-definitions)
+
+;; To convert a list containing definitions and assignments
+;; into a string of VHDL code
+;; Approach: convert each definition into either a signal (TODO: or procedure)
+;; convert each assignment into VHDL
+;; TODO: how to convert built-in procedures as opposed to defined procedures?
+;; need a list with initial (built-in) procedures
+(define (parsed-code->vhdl definitions-assignments)
+  (define nl "\n")
+  (define all-definitions (rearrange-definitions (car definitions-assignments)))
+  (define assignments (cdr definitions-assignments))
+  ;; To convert a definition into a VHDL sring
+  (define (definition->vhdl definition)
+    (match definition
+      [(io name type range initial io)
+       (~a name " : " (io->vhdl io) " "
+           (type->vhdl type range) ";")]
+      [else (printf "no match~n")]))
+  (define io-list
+    (for/list ([io (definitions-io all-definitions)]
+               [i (length (definitions-io all-definitions))])
+      (define name (signal-name io))
+      (define type (signal-type io))
+      (define range (signal-range io))
+      (define initial (signal-initial io))
+      (define io-type (io-io io))
+      (~a name " : " (io->vhdl io-type) " " (type->vhdl type range)
+          (if (< (+ i 1)
+                 (length (definitions-io all-definitions)))
+              (string-append ";" nl)
+              ""))))
+  (define io-string
+    (unless (empty? io-list)
+      (~a "port (" nl
+          (apply string-append io-list) ");")))
+  (printf "~a~n" io-string)
+  )
+
+(parsed-code->vhdl
+ (parse-code
+  '(
+    (def-i/o ;; maybe def-interface
+      ;; inputs and outputs
+      (o (def oLEDR (range 7 0)))
+      (o (def oLEDG (range 17 0))))
+    (set oLEDR 0 1))))
 
 ;; Example app
 (parse-code
