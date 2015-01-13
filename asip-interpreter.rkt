@@ -212,29 +212,6 @@
 (struct assignment (name range value)
         #:transparent #:mutable)
 
-;; To convert information about signal i/o into structures
-;; Superficial analysis in the beginning, upon reading the code
-;; In-depth analysis after everything has been read out
-(define (analyze-i/o io-exp)
-  (define (analyze-i/o-signal expression)
-    (define io-tag 'i)
-    (match expression
-      [(list 'i _)
-       (set! io-tag 'i)]
-      [(list 'o _)
-       (set! io-tag 'o)]
-      [(list 'io _)
-       (set! io-tag 'io)]
-      [whatever
-       (error 'analyze-i/o "Unknown i/o type: ~a~n" whatever)])
-    (apply io (append (cdr (vector->list
-                            (struct->vector
-                             (analyze-signal (cadr expression)))))
-                      (list io-tag))))
-  (map analyze-i/o-signal io-exp))
-
-(analyze-i/o '((o (def oLEDR (range 17 0)))))
-
 ;; To convert information about signal/variable/constant
 ;; into a structure
 ;; Superficial analysis in the beginning, upon reading the code
@@ -262,6 +239,28 @@
      (signal name 'undefined 'undefined 'undefined)]
     [definition (error 'analyze-signal "Error in definition:~n\"~a\"~n" definition)]))
 
+;; To convert information about signal i/o into structures
+;; Superficial analysis in the beginning, upon reading the code
+;; In-depth analysis after everything has been read out
+(define (analyze-i/o io-exp)
+  (define (analyze-i/o-signal expression)
+    (define io-tag 'i)
+    (match expression
+      [(list 'i _)
+       (set! io-tag 'i)]
+      [(list 'o _)
+       (set! io-tag 'o)]
+      [(list 'io _)
+       (set! io-tag 'io)]
+      [whatever
+       (error 'analyze-i/o "Unknown i/o type: ~a~n" whatever)])
+    (apply io (append (cdr (vector->list
+                            (struct->vector
+                             (analyze-signal (cadr expression)))))
+                      (list io-tag))))
+  (map analyze-i/o-signal io-exp))
+
+(analyze-i/o '((o (def oLEDR (range 17 0)))))
 
 (define (parse-code code)
   (define definitions empty)
@@ -321,7 +320,7 @@
 
 (define (io-type->vhdl io-type)
   (match io-type ['i 'in]['o 'out]['io 'inout]
-         [else (error 'io->vhdl "unknown io type ~a~n" io-type)]))
+         [else (error 'io-type->vhdl "unknown io type ~a~n" io-type)]))
 
 (define (type->vhdl type range)
   (define (analyze-range range)
@@ -366,6 +365,16 @@
              (cons def (definitions-procs all-definitions)))]))
   all-definitions)
 
+
+;; VHDL procedure struct
+;; the type is either 'provided-in-vhdl 'new 
+(struct procedure (name type code arity) #:transparent #:mutable)
+
+(define *procedures*
+  (list
+   (list 'rising-edge 'rising_edge)
+   (list '* '*)))
+
 ;; To convert a list containing definitions and assignments
 ;; into a string of VHDL code
 ;; Approach: convert each definition into either a signal (TODO: or procedure)
@@ -377,30 +386,31 @@
   (define all-definitions (rearrange-definitions (car definitions-assignments)))
   (define assignments (cdr definitions-assignments))
   ;; To convert a definition into a VHDL sring
-  (define (definition->vhdl definition)
+  (define (io-definition->vhdl definition)
     (match definition
       [(io name type range initial io)
-       (~a name " : " (io->vhdl io) " "
-           (type->vhdl type range) ";")]
+       (~a name " : " (io-type->vhdl io) " "
+           (type->vhdl type range))]
       [else (printf "no match~n")]))
   (define io-list
     (for/list ([io (definitions-io all-definitions)]
                [i (length (definitions-io all-definitions))])
-      (define name (signal-name io))
-      (define type (signal-type io))
-      (define range (signal-range io))
-      (define initial (signal-initial io))
-      (define io-type (io-io io))
-      (~a name " : " (io->vhdl io-type) " " (type->vhdl type range)
-          (if (< (+ i 1)
-                 (length (definitions-io all-definitions)))
+      (~a (io-definition->vhdl io)
+          (if (< (+ i 1) (length (definitions-io all-definitions)))
               (string-append ";" nl)
               ""))))
   (define io-string
-    (unless (empty? io-list)
-      (~a "port (" nl
-          (apply string-append io-list) ");")))
-  (printf "~a~n" io-string)
+    (if (empty? io-list)
+        ""
+        (~a "port (" nl
+            (apply string-append io-list) ");")))
+  (define signals-string "")
+  ;; (define (assignment->vhdl assignment)
+  ;;   ())
+  (define assignments-string "")
+  (printf "\"IO:\" ~a~n" io-string)
+  (printf "\"SIG:\" ~a~n" signals-string)
+  (printf "\"ASS:\" ~a~n" assignments-string)
   )
 
 (parsed-code->vhdl
