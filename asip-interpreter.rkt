@@ -310,6 +310,8 @@
 ;; In-depth analysis after everything has been read out
 (define (analyze-assignment exp)
   (match exp
+    [(list 'set name value)
+     (assignment name #f value)]
     [(list 'set name (list from to) value)
      (assignment name (list from to) value)]
     [(list 'set name at value)
@@ -405,9 +407,22 @@
         (~a "port (" nl
             (apply string-append io-list) ");")))
   (define signals-string "")
-  ;; (define (assignment->vhdl assignment)
-  ;;   ())
-  (define assignments-string "")
+  ;; only simple assignments for now
+  (define (assignment->vhdl assignment)
+    (~a (assignment-name assignment)
+        (when (assignment-range assignment)
+          (define range (assignment-range assignment))
+          (~a "("
+           (if (list? range)
+               (if (> (car range) (cadr range))
+                   (~a (car range) " downto " (cadr range))
+                   (~a (car range) " to " (cadr range)))
+               range)
+           ")"))
+        " <= " (assignment-value assignment) ";\n"))
+  (define assignments-string
+    (apply string-append
+           (map assignment->vhdl assignments)))
   (printf "\"IO:\" ~a~n" io-string)
   (printf "\"SIG:\" ~a~n" signals-string)
   (printf "\"ASS:\" ~a~n" assignments-string)
@@ -454,6 +469,8 @@
    (when (rising-edge iCLK_50)
      (def temp (ref iKEY 0))
      (set c 0 (xor c temp)))
+
+   (set c 10)
 
    ;; combinatorial logic
    (set b (range 3 0) (ref iKEY (range 3 0)))
