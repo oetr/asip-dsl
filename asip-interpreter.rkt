@@ -1,7 +1,7 @@
+;;#lang racket
+(require racket)
 (require rackunit)
 (require racket/format)
-(require racket/base)
-(require compatibility/mlist)
 ;; Current problem with the macro solution:
 ;; two definitions of the same thing:
 ;; 1) simulator,
@@ -413,12 +413,12 @@
         (when (assignment-range assignment)
           (define range (assignment-range assignment))
           (~a "("
-           (if (list? range)
-               (if (> (car range) (cadr range))
-                   (~a (car range) " downto " (cadr range))
-                   (~a (car range) " to " (cadr range)))
-               range)
-           ")"))
+              (if (list? range)
+                  (if (> (car range) (cadr range))
+                      (~a (car range) " downto " (cadr range))
+                      (~a (car range) " to " (cadr range)))
+                  range)
+              ")"))
         " <= " (assignment-value assignment) ";\n"))
   (define assignments-string
     (apply string-append
