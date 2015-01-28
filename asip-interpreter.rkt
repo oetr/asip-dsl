@@ -1,7 +1,9 @@
 ;;#lang racket
-(require racket)
-(require rackunit)
-(require racket/format)
+(require racket
+         rackunit
+         racket/format
+         "asip-vhdl.rkt")
+
 ;; Current problem with the macro solution:
 ;; two definitions of the same thing:
 ;; 1) simulator,
@@ -321,8 +323,11 @@
 
 
 (define (io-type->vhdl io-type)
-  (match io-type ['i 'in]['o 'out]['io 'inout]
-         [else (error 'io-type->vhdl "unknown io type ~a~n" io-type)]))
+  (match io-type 
+    ['i 'in]
+    ['o 'out]
+    ['io 'inout]
+    [else (error 'io-type->vhdl "unknown io type ~a~n" io-type)]))
 
 (define (type->vhdl type range)
   (define (analyze-range range)
@@ -383,7 +388,7 @@
 ;; convert each assignment into VHDL
 ;; TODO: how to convert built-in procedures as opposed to defined procedures?
 ;; need a list with initial (built-in) procedures
-(define (parsed-code->vhdl definitions-assignments)
+(define (parsed-code->vhdl entity-name definitions-assignments)
   (define nl "\n")
   (define all-definitions (rearrange-definitions (car definitions-assignments)))
   (define assignments (cdr definitions-assignments))
@@ -406,6 +411,7 @@
         ""
         (~a "port (" nl
             (apply string-append io-list) ");")))
+  (define generics-string "")
   (define signals-string "")
   ;; only simple assignments for now
   (define (assignment->vhdl assignment)
@@ -423,19 +429,23 @@
   (define assignments-string
     (apply string-append
            (map assignment->vhdl assignments)))
-  (printf "\"IO:\" ~a~n" io-string)
+  
+  (printf "~a~n" (vhdl-entity entity-name io-string generics-string))
   (printf "\"SIG:\" ~a~n" signals-string)
   (printf "\"ASS:\" ~a~n" assignments-string)
   )
 
-(parsed-code->vhdl
- (parse-code
-  '(
-    (def-i/o ;; maybe def-interface
-      ;; inputs and outputs
-      (o (def oLEDR (range 7 0)))
-      (o (def oLEDG (range 17 0))))
-    (set oLEDR 0 1))))
+(define-syntax def-vhdl
+  (syntax-rules ()
+    [(_ name body ...)
+     (parsed-code->vhdl 'name (parse-code (list 'body ...)))]))
+
+(def-vhdl lights-on
+  (def-i/o ;; maybe def-interface
+    ;; inputs and outputs
+    (o (def oLEDR (range 10 0) 1))
+    (o (def oLEDG (range 17 0))))
+  (set oLEDR 0 1))
 
 ;; Example app
 (parse-code
@@ -485,3 +495,4 @@
      (for ([i 0 10]) ;; come out as a counter
        (add-regs)
        (add-regs)))))
+
