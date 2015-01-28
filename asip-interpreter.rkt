@@ -58,58 +58,6 @@
 - Convert ASIP code to a state machine
 |#
 
-;; The environment
-;; Consists of signals and assignments
-;; There are two environments:
-;; 1) consists of all variables and procedures
-;; 2) consists of all assignments
-;; Once the two have been determined, two things can be done
-;; 1) The type of variables can be determined bysed on the usage
-;; 2) Everything can be compiled to VHDL after that
-;; TODO: optimize: use a better data structure than a list
-(define (make-environment (names empty) (vals empty))
-  (let ([environment (map cons (reverse names) (reverse vals))])
-    (define (is-empty? env) (empty? env))
-    (define (is-bound? env name)
-      (if (is-empty? env)
-          #f
-          (or (symbol=? (caar env) name)
-              (is-bound? (cdr env) name))))
-    (define (ref env name)
-      (cond [(is-empty? env)
-             (error 'environment-ref
-                    "unbound identifier: ~a~n" name)]
-            [(symbol=? (caar env) name) (cdar env)]
-            [else (ref (cdr env) name)]))
-    (define (add! names-vals)
-      (set! environment (append names-vals environment)))
-    (lambda (command . data)
-      (match command
-        ['empty? (is-empty? environment)]
-        ['is-bound? (is-bound? environment (car data))]
-        ['ref (ref environment (car data))]
-        ['add! (add! (car data))]
-        ['dump environment]))))
-
-(define (environment-is-bound? env name)
-  (env 'is-bound? name))
-(define (environment-ref env name)
-  (env 'ref name))
-(define (environment-empty? env)
-  (env 'empty?))
-(define (environment-add! env names vals)
-  (env 'add! (map cons (reverse names) (reverse vals))))
-(define (environment-dump env)
-  (env 'dump))
-
-;; Test the environment
-(define *environment* (make-environment))
-(environment-is-bound? *environment* 'e)
-(environment-empty? *environment*)
-(environment-add! *environment* '(a b c d) '(1 2 3 4))
-(environment-dump *environment*)
-(environment-is-bound? *environment* 'a)
-(environment-ref *environment* 'a)
 
 (define (variable? s-expr)
   (symbol? s-expr))
