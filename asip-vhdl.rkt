@@ -27,5 +27,11 @@
         signals nl
         "begin" nl
         assignments nl
-        "end architecture arch;" nl)))
+        "end architecture arch;" nl))
+  
+  
+  (define (symbol->vhdl-symbol a-symbol)
+    (string->symbol 
+     (regexp-replace #rx"-" (symbol->string a-symbol) "_")))
+  )
 
