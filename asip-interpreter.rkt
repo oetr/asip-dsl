@@ -378,22 +378,33 @@
     (apply string-append
            (map assignment->vhdl assignments)))
   
-  (printf "~a~n" (vhdl-entity entity-name io-string generics-string))
-  (printf "\"SIG:\" ~a~n" signals-string)
-  (printf "\"ASS:\" ~a~n" assignments-string)
+  (~a (vhdl-standard-libraries)
+      (vhdl-entity entity-name io-string generics-string)
+      (vhdl-architecture entity-name
+                         signals-string 
+                         assignments-string))
+  ;; (printf "\"SIG:\" ~a~n" signals-string)
+  ;; (printf "\"ASS:\" ~a~n" assignments-string)
   )
 
 (define-syntax def-vhdl
   (syntax-rules ()
-    [(_ name body ...)
-     (parsed-code->vhdl 'name (parse-code (list 'body ...)))]))
+    [(_ name body ...)     
+     (parsed-code->vhdl 
+      (symbol->vhdl-symbol 'name) ;; replace all "-" with "_"
+      (parse-code (list 'body ...)))]))
 
-(def-vhdl lights-on
-  (def-i/o ;; maybe def-interface
-    ;; inputs and outputs
-    (o (def oLEDR (range 10 0) 1))
-    (o (def oLEDG (range 17 0))))
-  (set oLEDR 0 1))
+(define ent1
+  (def-vhdl lights-on
+    (def-i/o ;; maybe def-interface
+      ;; inputs and outputs
+      (o (def oLEDR (range 10 0) 1))
+      (o (def oLEDG (range 17 0))))
+    (set oLEDR 0 1)))
+
+
+(display-to-file ent1 "lights_on.vhd"
+                 #:exists 'replace)
 
 ;; Example app
 (parse-code
