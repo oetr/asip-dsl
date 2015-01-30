@@ -398,7 +398,7 @@
   (def-vhdl lights-on
     (def-i/o ;; maybe def-interface
       ;; inputs and outputs
-      (o (def oLEDR (range 10 0) 1))
+      (o (def oLEDR (range 10 0)))
       (o (def oLEDG (range 17 0))))
     (set oLEDR 0 1)))
 
