@@ -102,6 +102,17 @@
        (1)
        (2))))
 
+;; how about this?:
+(when (rising-edge? clk)
+  (if (= reset 0)
+      (begin
+        (set pixel-status #t)
+        (set pixel-status #f))
+      (begin
+        (set a 0)
+        (set b 0)
+        (set c 0))))
+
 
 (posedge (clk) (list sig1 sig2 sig3))
 
