@@ -25,7 +25,7 @@
 
   ;; Simulator: Interpreter approach
   #|
-  - Analyze the expressions 
+  - Analyze the expressions
   - Execute the expressions
 
   - It is important to analyze the expressions before their execution because many will be executed "in parallel".
@@ -42,7 +42,7 @@
 
   ;; VHDL-Compiler: Interpreter approach
   #|
-  - Analyze the expressions 
+  - Analyze the expressions
   - Compile to VHDL
 
   ;; Analysis part 1: logic without ASIP
@@ -66,7 +66,7 @@
   (test-case "variable" (check-true (variable? 'a)))
 
   ;; to check whether an s-expression is a signal definition
-  ;; differentiate between 
+  ;; differentiate between
   (define (signal-definition? s-expr)
     (and (list? s-expr)
          (symbol=? 'def (car s-expr))
@@ -271,7 +271,7 @@
 
 
   (define (io-type->vhdl io-type)
-    (match io-type 
+    (match io-type
       ['i 'in]
       ['o 'out]
       ['io 'inout]
@@ -321,14 +321,57 @@
     all-definitions)
 
 
-  ;; VHDL procedure struct
-  ;; the type is either 'provided-in-vhdl 'new 
-  (struct procedure (name type code arity) #:transparent #:mutable)
+  ;; VHDL function struct
+  ;; the type: 'prefix 'infix
+  ;; arity
+  (struct function (name type arity) #:transparent #:mutable)
+  (struct procedure (name arity) #:transparent #:mutable)
+  (struct special-form (name code) #:transparent #:mutable)
 
-  (define *procedures*
+  (define (make-built-in-functions)
     (list
-     (list 'rising-edge 'rising_edge)
-     (list '* '*)))
+     (function '+ 'infix 2)
+     (function '- 'infix 2)
+     (function 'not 'prefix 1)
+     (function 'and 'infix 2)
+     (function 'or 'infix 2)
+     (function '* 'infix 2 )))
+
+  (define (function->vhdl fn args)
+    (define arity (function-arity fn))
+    (when (not (= arity (length args)))
+      (error (function-name fn) "function arity should be ~a, but is ~a instead~n" arity (length args)))
+    (if (eq? (function-type fn) 'infix)
+        (~a "(" (car args) " " (function-name fn) " " (cadr args)")")
+        (~a "("(function-name fn) " " (car args) ")")))
+
+  (define (make-built-in-procedures)
+    (list
+     (procedure 'rising-edge? 1)
+     (procedure 'to_integer 2)
+     (procedure 'std_logic_vector 1)
+     (procedure 'unsigned 1)))
+
+  (define (procedure->vhdl proc args)
+    (define arity (procedure-arity proc))
+    (when (not (= arity (length args)))
+      (error (procedure-name proc) "procedure arity should be ~a, but is ~a instead~n" arity (length args))))
+
+
+  (define (make-built-in-special-forms)
+    (list
+     (procedure 'when 'when)
+     (procedure 'for 'for)))
+
+  (define (special-form->vhdl form args)
+    (special-form-name form))
+
+  (define (find-definition name accessor definitions)
+    (define (find-local definitions)
+      (cond [(empty? definitions) #f]
+            [(eq? name (accessor (car definitions))) (car definitions)]
+            [else (find-local (cdr definitions))]))
+    (find-local definitions))
 
   ;; To convert a list containing definitions and assignments
   ;; into a string of VHDL code
@@ -338,9 +381,12 @@
   ;; need a list with initial (built-in) procedures
   (define (parsed-code->vhdl entity-name definitions-assignments)
     (define nl "\n")
-    (define all-definitions (rearrange-definitions 
+    (define all-definitions (rearrange-definitions
                              (car definitions-assignments)))
     (define assignments (cdr definitions-assignments))
+    (define functions (make-built-in-functions))
+    (define procedures (make-built-in-procedures))
+    (define special-forms (make-built-in-special-forms))
     ;; To convert a definition into a VHDL sring
     (define (io-definition->vhdl definition)
       (match definition
@@ -363,8 +409,34 @@
     (define generics-string "")
     (define signals-string "")
     (define (expression->vhdl exp)
-      (cond [(list? exp) ;; convert all expressions on the list
-             exp]
+      ;; convert all expressions on the list
+      (cond [(list? exp)
+             (define name (car exp))
+             ;; search the name in functions, procedures and special forms
+             (define definition (find-definition name
+                                                 function-name
+                                                 functions))
+             (if definition
+                 (function->vhdl definition
+                                 (map expression->vhdl (cdr exp)))
+                 (let [(definition (find-definition name
+                                                    procedure-name
+                                                    procedures))]
+                   (if definition
+                       (procedure->vhdl definition
+                                        (map expression->vhdl
+                                             (cdr exp)))
+                       (let [(definition (find-definition
+                                          name
+                                          special-form-name
+                                          special-forms))]
+                         (if definition
+                             (special-form->vhdl
+                              definition
+                              (map expression->vhdl
+                                   (cdr exp)))
+                             (error "expression not found~a~n"
+                                    name))))))]
             [else exp]))
     ;; only simple assignments for now
     (define (assignment->vhdl assignment)
@@ -387,7 +459,7 @@
     (~a (vhdl-standard-libraries)
         (vhdl-entity entity-name io-string generics-string)
         (vhdl-architecture entity-name
-                           signals-string 
+                           signals-string
                            assignments-string))
     ;; (printf "\"SIG:\" ~a~n" signals-string)
     ;; (printf "\"ASS:\" ~a~n" assignments-string)
@@ -395,8 +467,8 @@
 
   (define-syntax def-vhdl
     (syntax-rules ()
-      [(_ name body ...)     
-       (parsed-code->vhdl 
+      [(_ name body ...)
+       (parsed-code->vhdl
         (symbol->vhdl-symbol 'name) ;; replace all "-" with "_"
         (parse-code (list 'body ...)))]))
   (provide def-vhdl)

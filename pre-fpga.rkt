@@ -104,6 +104,9 @@
 
 ;; how about this?:
 (when (rising-edge? clk)
+  (when set?
+    (set pixel-status #t)
+    (set pixel-status #f))
   (if (= reset 0)
       (begin
         (set pixel-status #t)
@@ -113,14 +116,37 @@
         (set b 0)
         (set c 0))))
 
-
 (posedge (clk) (list sig1 sig2 sig3))
+
+;; inverters
+(def n 10)
+(def inverters (range 0 n))
+
+(for ([i n])
+  (set inverters i (get inverters (mod (+ i 1) n))))
+
+
+(def (pl a b c)
+  (+ (* a b)
+     (* b c)))
+
 
 (set sig1 10)
 (set (sig1 (+ sig2 3))
      (sig2 (+ 20 i))
      (sig8 (and (xor ) or ...)))
 
+(set sig1 (+ a b c d))
+(set sig1 (+ a b c d))
+
+(set sig1 (xor (+ 10 a)
+               (+ 10 b)))
+
+
+()
+(set sig1 (custom-multiply
+           (+ 10 a)
+           (+ 10 b)))
 
 ;; Save all pixels in a row buffer
 (cond
@@ -131,13 +157,9 @@
        (C row-buffer))]
  [(= x 1)
   (set ())]
-  
+
 (set C row-buffer)
 (set B C)
 (set A B)
 
 (set A )
-
-
-
-

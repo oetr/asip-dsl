@@ -12,7 +12,10 @@
     (def a (range 0 10))
     (def b (range 0 10))
     (def c (range 0 10))
-    (set a (+ a b))
+    (set a (+ (+ a b)
+              (+ c d)))
+    (set b (not b))
+    (set a (and c (not b)))
     (set oLEDR 0 1)
     (set oLEDR 1 1)))
 
@@ -29,7 +32,7 @@
      (o (def oLEDR (range 17 0)))
      (o (def oLEDG (range 7 0)))
      (io (def GPIO_0 (range 31 0))))
-   
+
    ;; registers, wires
    (def a (range 10 0) 10)
    (def ab (range 10 0) 10)
@@ -38,7 +41,7 @@
    (def d (make-list 10 0)) ;; set default values only, derive range
    (def e (list 1 0 0 1 1 1 0))
    (def N 10) ;; constant
-   
+
    ;; looped signal definition
    ;; will be expanded into 10 signals/registers
    (def-vector c N (range 10 0))
@@ -67,4 +70,3 @@
      (for ([i 0 10]) ;; come out as a counter
        (add-regs)
        (add-regs)))))
-
